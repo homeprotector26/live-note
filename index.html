@@ -1,0 +1,278 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light">
+  <title>LIVE NOTE — 실시간 AI 기록</title>
+  <style>
+    :root{--yellow:#fee500;--ink:#252525;--sub:#777;--line:#e9e9ec;--soft:#f8f9fb;--blue:#d9e8f4;--green:#16a081;--danger:#dc5353;--radius:20px}
+    *{box-sizing:border-box}html,body{margin:0;height:100%;font-family:system-ui,-apple-system,"Apple SD Gothic Neo","Malgun Gothic",sans-serif;color:var(--ink);background:#f1f3f6}button,input,textarea,select{font:inherit}button{cursor:pointer}button:disabled{opacity:.53;cursor:not-allowed}input,select,textarea{outline:0}
+    [hidden]{display:none!important}.shell{max-width:1600px;min-height:100dvh;margin:auto;background:#fff;display:flex;flex-direction:column;box-shadow:0 0 45px #0000000c}
+    .head{height:76px;padding:0 30px;display:flex;align-items:center;gap:14px;border-bottom:1px solid var(--line);flex-shrink:0}.logo{width:46px;height:46px;background:var(--yellow);display:grid;place-items:center;border-radius:16px;font-size:22px;font-weight:950;letter-spacing:-1px}.wordmark b{font-size:22px;letter-spacing:-1px}.wordmark small{display:block;color:var(--sub);font-size:11px;letter-spacing:1.2px;margin-top:1px}.headtag{margin-left:auto;border-radius:40px;background:#fff6b9;padding:8px 13px;font-size:12px;font-weight:750}
+    .toolrow{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:15px 25px;background:#fff;border-bottom:1px solid var(--line)}.label{font-weight:700;font-size:12px;color:#777;white-space:nowrap}select,input{border:1px solid #e4e5e9;background:#fff;border-radius:12px;padding:11px 13px;min-width:0;color:var(--ink)}#sessionSelect{flex:1;min-width:185px;max-width:550px}.toolbtn{border:1px solid #e0e1e7;background:#fff;color:#333;border-radius:12px;padding:11px 15px;font-size:13px;font-weight:700}.toolbtn:hover{border-color:#f4d200}.toolbtn.primary{background:var(--yellow);border-color:var(--yellow)}.toolbtn.record{background:#242424;color:#fff;border-color:#242424}.toolbtn.stop{background:#fff2f2;color:#cb4242;border-color:#ffd4d4}.toolbtn.mini{padding:8px 12px;font-size:12px}
+    .statusline{padding:10px 26px;border-bottom:1px solid var(--line);background:#fffdf1;display:flex;align-items:center;gap:10px;font-size:12px;min-height:39px}.dot{width:8px;height:8px;border-radius:50%;background:#c3c6ca;flex-shrink:0}.dot.on{background:#e34c4c;box-shadow:0 0 0 4px #ffdddd;animation:blink 1.5s infinite}@keyframes blink{50%{opacity:.35}}.statusline span:last-child{margin-left:auto;color:var(--sub);font-size:11px}
+    .workspace{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:0;min-height:0;flex:1;overflow:hidden}.panel{display:flex;flex-direction:column;min-width:0;background:#fff;min-height:calc(100dvh - 182px);height:calc(100dvh - 182px)}.panel+ .panel{border-left:1px solid var(--line);background:#fafbfc}.panelhead{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:23px 25px 17px;border-bottom:1px solid #ededed}.panelname{display:flex;align-items:center;gap:11px}.panelicon{display:grid;place-items:center;width:42px;height:42px;background:#fff1a0;border-radius:14px;font-size:21px}.panelicon.ai{background:#dfe9ff}.panelname h2{font-size:20px;line-height:1.2;margin:0}.panelname p{color:var(--sub);font-size:12px;margin:5px 0 0}.count{font-size:11px;color:#777;white-space:nowrap;background:#f3f4f5;border-radius:999px;padding:8px 12px}.panelbody{flex:1;min-height:0;overflow-y:auto;padding:23px 25px;scroll-behavior:smooth}.empty{display:grid;place-items:center;text-align:center;height:100%;min-height:180px;color:#a2a5ac}.empty b{display:block;color:#777;font-size:16px}.empty p{font-size:13px;line-height:1.7;max-width:310px}.emptyicon{font-size:35px;display:block;margin-bottom:10px}
+    .lineitem{display:flex;gap:12px;align-items:flex-start;margin-bottom:15px}.linetime{font-size:11px;color:#9ca1aa;padding-top:8px;width:49px;flex-shrink:0}.linetext{white-space:pre-wrap;overflow-wrap:anywhere;background:#f3f6f8;padding:13px 15px;border-radius:3px 16px 16px 16px;font-size:14px;line-height:1.65;max-width:calc(100% - 61px)}.interim{color:#989898;background:#fff6c2;opacity:.85}.summaryText{font-size:14px;line-height:1.85;white-space:pre-wrap;overflow-wrap:anywhere;max-width:72ch}.summaryText h3{margin:19px 0 8px;font-size:17px;letter-spacing:-.3px}.summaryText h3:first-child{margin-top:0}.summaryText h4{margin:16px 0 6px;font-size:14px}.sumBullet{padding-left:16px;position:relative;margin:5px 0}.sumBullet:before{content:"•";position:absolute;left:2px}.sumParagraph{margin:6px 0 13px}.sumOrdered{margin:6px 0 6px 11px}.summaryStamp{font-size:12px;color:var(--sub);margin-bottom:17px}.panelbottom{flex-shrink:0;padding:15px 22px;border-top:1px solid #eee;background:#fff}.draftrow{display:flex;gap:8px}.draftrow textarea{width:100%;height:64px;resize:vertical;min-height:54px;max-height:190px;border:1px solid #e2e5eb;border-radius:12px;padding:13px;font-size:13px;line-height:1.5}.draftrow textarea:focus{border-color:#d4be00}.panelbottom small{display:block;color:#96999d;font-size:11px;margin-top:9px}.aiactions{display:flex;align-items:center;flex-wrap:wrap;gap:9px}.checkline{font-size:12px;color:#686868;display:flex;align-items:center;gap:7px}.checkline input{accent-color:#f0d500}.warning{font-size:12px;color:#886e12;background:#fff8d7;border-radius:11px;padding:11px 13px;line-height:1.6;margin-bottom:12px}.alert{font-size:12px;color:#8c2626;background:#fff0ef;border-radius:11px;padding:11px 13px;line-height:1.6;margin-bottom:12px}.footnote{margin:0;padding:12px 25px;color:#858585;background:#fff;border-top:1px solid var(--line);font-size:11px;line-height:1.5}
+    .overlay{position:fixed;inset:0;background:#0006;z-index:50;display:grid;place-items:center;padding:22px}.modal{background:white;width:min(480px,100%);border-radius:22px;padding:25px;box-shadow:0 20px 65px #0002}.modal h3{margin:0 0 10px;font-size:20px}.modal p{font-size:13px;line-height:1.6;color:var(--sub)}.modal label{display:block;font-size:12px;font-weight:800;margin:16px 0 7px}.modal input,.modal select{width:100%}.modalActions{display:flex;gap:9px;justify-content:flex-end;margin-top:24px}.toast{position:fixed;z-index:80;bottom:25px;left:50%;transform:translateX(-50%);background:#252525;color:#fff;padding:13px 18px;border-radius:12px;box-shadow:0 10px 36px #0003;max-width:95vw;font-size:13px}
+    .recorderpage{min-height:100dvh;background:#f6f7f9;padding:25px;display:flex;align-items:center;justify-content:center}.recbox{max-width:590px;width:100%;background:#fff;border-radius:28px;box-shadow:0 20px 55px #0001;padding:29px}.recbox h1{margin:8px 0;font-size:25px}.recbox p{color:#777;font-size:14px;line-height:1.7}.recbox button{margin:10px 10px 10px 0}.reclive{min-height:170px;margin-top:16px;background:#f5f7f9;border-radius:15px;padding:17px;white-space:pre-wrap;overflow-wrap:anywhere;line-height:1.8;font-size:14px}.reccount{color:#777;font-size:12px}.recstatus{font-size:13px;font-weight:700;margin-top:13px}
+    @media(max-width:950px){.head{height:67px;padding:0 16px}.toolrow{padding:11px 14px}.panel{height:calc(100dvh - 195px);min-height:0}.panelhead{padding:15px}.panelbody{padding:15px}.panelbottom{padding:12px}.panelname h2{font-size:16px}.statusline{padding:9px 14px}}
+    @media(max-width:690px){.workspace{grid-template-columns:1fr;overflow:visible}.panel{height:440px;min-height:440px}.panel+.panel{border-left:0;border-top:5px solid #f1f1f1;min-height:480px}.headtag{display:none}.panelbody{padding:13px 16px}.panelname p{font-size:11px}.toolrow{gap:7px}#sessionSelect{max-width:none;flex-basis:100%}.statusline span:last-child{display:none}.footnote{padding:12px 15px}}
+  </style>
+</head>
+<body>
+<div class="shell" id="dashboard">
+  <header class="head"><div class="logo">L</div><div class="wordmark"><b>LIVE NOTE</b><small>VOICE TO SMART NOTES</small></div><span class="headtag">Sonnet 5.5 · AI 수업 도우미</span></header>
+  <div class="toolrow">
+    <span class="label">기록 선택</span>
+    <select id="sessionSelect" aria-label="기존 기록 선택"><option value="">불러오는 중...</option></select>
+    <button class="toolbtn" id="newSessionBtn" type="button">＋ 새 기록</button>
+    <button class="toolbtn record" id="startBtn" type="button" disabled>● 녹음 시작</button>
+    <button class="toolbtn stop" id="stopBtn" type="button" disabled>■ 정지</button>
+  </div>
+  <div class="statusline"><i id="liveDot" class="dot"></i><strong id="recordStatus">초기화 중...</strong><span id="saveStatus">Google Sheets 자동 저장</span></div>
+  <main class="workspace">
+    <section class="panel" aria-label="실시간 원문">
+      <div class="panelhead"><div class="panelname"><span class="panelicon">🎙</span><div><h2>실시간 원문</h2><p>말하는 내용이 이곳에 그대로 쌓입니다</p></div></div><span class="count" id="segmentCount">0문장</span></div>
+      <div class="panelbody" id="transcriptBody" aria-live="off"><div class="empty"><div><span class="emptyicon">🎙</span><b>녹음을 시작해 보세요</b><p>확정된 음성 인식 결과는 자동으로 저장됩니다. 마이크를 사용할 수 없으면 직접 입력할 수도 있어요.</p></div></div></div>
+      <div class="panelbottom"><div class="draftrow"><textarea id="manualText" maxlength="650" placeholder="녹음이 어려울 때는 직접 입력한 문장도 기록할 수 있어요."></textarea><button class="toolbtn mini primary" id="addManualBtn" type="button">추가</button></div><small>임시 음성 인식 문장은 저장하지 않고, 확정된 문장만 기록합니다.</small></div>
+    </section>
+    <section class="panel" aria-label="AI 수업 정리">
+      <div class="panelhead"><div class="panelname"><span class="panelicon ai">✦</span><div><h2>AI 실시간 정리</h2><p>Sonnet 5.5가 핵심 개념·내용을 정리합니다</p></div></div><span class="count" id="summaryVersion">아직 없음</span></div>
+      <div class="panelbody" id="summaryBody"><div class="empty"><div><span class="emptyicon">✦</span><b>기록이 쌓이면 정리를 시작해요</b><p>녹음 중 약 60초마다 새로운 내용을 기존 요약과 합쳐 갱신합니다.</p></div></div></div>
+      <div class="panelbottom">
+        <div id="panelAlert" class="warning" hidden></div>
+        <div class="aiactions"><button class="toolbtn primary" id="summarizeBtn" type="button" disabled>✦ 지금 AI 정리</button><label class="checkline"><input type="checkbox" id="autoSummary" checked>60초마다 자동 정리</label><button class="toolbtn mini" id="copySummary" type="button">요약 복사</button></div>
+        <small id="aiHelp">API 호출은 약 55초 이상 간격으로 제한됩니다. 요약은 실시간 스트리밍이 아닌 주기적 갱신입니다.</small>
+      </div>
+    </section>
+  </main>
+  <p class="footnote">음성 인식은 브라우저 Speech API를 사용하며, 서비스에 따라 음성이 외부 음성 인식 서버로 전송될 수 있습니다. 타인을 녹음할 때는 사전에 동의를 받으세요. AI 정리는 오류가 있을 수 있습니다.</p>
+</div>
+
+<div id="newSessionModal" class="overlay" hidden><div class="modal" role="dialog" aria-modal="true" aria-labelledby="modalTitle"><h3 id="modalTitle">새 수업·대화 기록</h3><p>원문과 AI 정리는 세션별로 구분해 Google 스프레드시트에 저장합니다.</p><label for="newTitle">기록 제목</label><input id="newTitle" maxlength="80" placeholder="예: 회로이론 9주차 강의"><label for="newMode">기록 종류</label><select id="newMode"><option value="수업">수업 · 강의</option><option value="대화">회의 · 대화</option></select><div class="modalActions"><button class="toolbtn" id="cancelNew" type="button">취소</button><button class="toolbtn primary" id="confirmNew" type="button">기록 만들기</button></div></div></div>
+<div id="toast" class="toast" hidden role="status"></div>
+
+<!-- 동일한 Index.html을 독립 HTTPS 정적 호스팅에 게시하면 recorder=1에서 녹음 전용 팝업으로 동작 -->
+<div id="recorderWindow" class="recorderpage" hidden><div class="recbox"><div class="logo">L</div><h1>음성 인식 녹음창</h1><p>이 창은 마이크 권한이 제한된 Google Apps Script 웹앱 대신 마이크를 사용합니다. 인식된 문장은 연결된 메인 화면으로 실시간 전달됩니다.</p><div class="recstatus" id="recStatus">메인 화면 연결 중...</div><button class="toolbtn record" id="recStart" type="button">● 마이크 시작</button><button class="toolbtn stop" id="recStop" type="button" disabled>■ 마이크 정지</button><div class="reccount" id="recCount">전송된 문장: 0개</div><div id="recPreview" class="reclive">마이크 시작을 눌러 주세요.</div><p style="font-size:12px">녹음창과 원래 웹앱 창을 모두 열어 두세요. 연결이 끊기면 원문이 메인 화면에 저장되지 않을 수 있습니다.</p></div></div>
+
+<script>
+'use strict';
+const $ = id => document.getElementById(id);
+const params = new URLSearchParams(location.search);
+const isRecorder = params.get('recorder') === '1';
+const SpeechAPI = window.SpeechRecognition || window.webkitSpeechRecognition;
+const clean = value => typeof value === 'string' ? value.trim() : '';
+const formatTime = iso => {const d=new Date(iso);return Number.isNaN(d.getTime())?'':d.toLocaleTimeString('ko-KR',{hour:'2-digit',minute:'2-digit'});};
+const token = () => {if(window.crypto && window.crypto.randomUUID) return window.crypto.randomUUID(); return 'evt_'+Date.now()+'_'+Math.random().toString(36).slice(2,16);};
+const node = (tag, className, content) => {const el=document.createElement(tag); if(className) el.className=className; if(content!==undefined) el.textContent=String(content);return el;};
+function toast(message){const el=$('toast');el.textContent=String(message);el.hidden=false;clearTimeout(toast.timer);toast.timer=setTimeout(()=>el.hidden=true,4300);}
+function callGS(name,...args){return new Promise((resolve,reject)=>{
+  if(!window.google || !google.script || !google.script.run){reject(new Error('Google Apps Script 웹앱 주소에서 실행해야 합니다.'));return;}
+  google.script.run.withSuccessHandler(resolve).withFailureHandler(reject)[name](...args);
+});}
+
+/** Web Speech API: Chrome/Edge 우선. 음성 확정 결과와 임시 결과를 분리합니다. */
+class LiveSpeech {
+  constructor(onFinal,onInterim,onState,onError){this.onFinal=onFinal;this.onInterim=onInterim;this.onState=onState;this.onError=onError;this.instance=null;this.want=false;this.restartTimer=null;this.finalIndexes=new Set();this.errors=0;}
+  start(){if(!SpeechAPI){this.onError('이 브라우저에서는 SpeechRecognition을 지원하지 않습니다. 최신 Chrome 또는 Edge를 사용하세요.',true);return false;}
+    if(this.want) return true;
+    this.want=true;this.errors=0;this.spawn();return true;
+  }
+  spawn(){if(!this.want)return;
+    const rec=new SpeechAPI();this.instance=rec;this.finalIndexes.clear();rec.lang='ko-KR';rec.continuous=true;rec.interimResults=true;rec.maxAlternatives=1;
+    rec.onstart=()=>{this.errors=0;this.onState(true);};
+    rec.onresult=event=>{let interim='';for(let i=event.resultIndex;i<event.results.length;i++){
+      const result=event.results[i];const t=result[0]&&result[0].transcript?result[0].transcript.trim():'';
+      if(!t)continue;
+      if(result.isFinal){if(!this.finalIndexes.has(i)){this.finalIndexes.add(i);this.onFinal(t);}}
+      else interim+=(interim?' ':'')+t;
+    }this.onInterim(interim);};
+    rec.onerror=event=>{const code=event&&event.error||'unknown';
+      if(code==='no-speech'||code==='aborted')return;
+      this.errors++;
+      const fatal=['not-allowed','service-not-allowed','audio-capture','language-not-supported'].includes(code) || (code==='network'&&this.errors>=3);
+      if(fatal)this.want=false;
+      const help=(code==='not-allowed'||code==='service-not-allowed'||code==='audio-capture')?'마이크 권한 또는 iframe 보안 정책으로 차단되었습니다. HTTPS 외부 녹음창을 사용하세요.':'음성 인식 오류: '+code;
+      this.onError(help,fatal);
+    };
+    rec.onend=()=>{this.onState(false);this.onInterim('');if(this.want){this.restartTimer=setTimeout(()=>this.spawn(),750);}};
+    try{rec.start();}catch(err){this.want=false;this.onState(false);this.onError('마이크를 시작할 수 없습니다. 브라우저 권한을 확인하세요.',true);}
+  }
+  stop(){this.want=false;clearTimeout(this.restartTimer);if(this.instance){try{this.instance.stop();}catch(_){} }this.onInterim('');}
+}
+
+const app={selected:null,sessions:[],recorderUrl:'',recorderWindow:null,recorderOrigin:'',recorderNonce:'',speech:null,listening:false,segmentIds:new Set(),queue:[],flushPromise:null,summaryBusy:false,loaded:false,summaryTimer:null,summaryText:'',lastSummarizedSequence:0,disableSwitch:false};
+function setRecordStatus(msg,active=false){$('recordStatus').textContent=msg;$('liveDot').classList.toggle('on',active);$('startBtn').disabled=!app.loaded||!app.selected||active;$('stopBtn').disabled=!app.loaded||!active;app.listening=active;}
+function displaySave(msg){$('saveStatus').textContent=msg;}
+function setAlert(msg,kind='warning'){$('panelAlert').hidden=!msg;$('panelAlert').textContent=msg;$('panelAlert').className=kind;}
+function renderSessions(){const sel=$('sessionSelect');sel.replaceChildren();if(!app.sessions.length){sel.append(node('option','', '먼저 새 기록을 만드세요'));sel.value='';return;}
+  for(const s of app.sessions){const opt=node('option','',s.mode+' · '+s.title+' · '+s.createdAt.slice(0,10));opt.value=s.id;sel.append(opt);}sel.value=app.selected&&app.selected.id||'';}
+function renderTranscript(){const body=$('transcriptBody');body.replaceChildren();app.segmentIds.clear();const segments=app.selected&&app.selected.segments||[];
+  if(!segments.length){const box=node('div','empty');const inner=node('div');inner.append(node('span','emptyicon','🎙'),node('b','','녹음이 시작되면 문장이 표시됩니다'),node('p','','마이크 녹음 또는 직접 입력을 시작하세요.'));box.append(inner);body.append(box);}
+  else segments.forEach(s=>addTranscriptDOM(s.text,s.createdAt,s.eventId,false));
+  $('segmentCount').textContent=(app.selected?app.selected.totalSegments:0)+'문장';
+  if(app.selected&&app.selected.truncated){const note=node('div','warning','이 화면은 마지막 800문장만 보여줍니다. 전체 기록은 구글 스프레드시트에 저장되어 있습니다.');body.prepend(note);}
+  body.scrollTop=body.scrollHeight;
+}
+function addTranscriptDOM(text,iso,id,scroll=true){if(id&&app.segmentIds.has(id))return;if(id)app.segmentIds.add(id);
+  const body=$('transcriptBody');const empty=body.querySelector('.empty');if(empty)empty.remove();
+  const row=node('div','lineitem');row.append(node('time','linetime',formatTime(iso)),node('div','linetext',text));body.append(row);
+  if(scroll)body.scrollTop=body.scrollHeight;
+}
+function showInterim(text){const body=$('transcriptBody');let el=$('interimRow');if(!clean(text)){if(el)el.remove();return;}
+  if(!el){el=node('div','lineitem');el.id='interimRow';el.append(node('time','linetime','실시간'),node('div','linetext interim'));body.append(el);}
+  el.lastChild.textContent=text;body.scrollTop=body.scrollHeight;
+}
+function renderSummary(summary){const box=$('summaryBody');box.replaceChildren();app.summaryText=summary&&summary.text||'';
+  app.lastSummarizedSequence=summary&&summary.lastSequence||0;
+  $('summaryVersion').textContent=summary?'정리 '+summary.version+'회':'아직 없음';
+  if(!summary){const empty=node('div','empty');const inside=node('div');inside.append(node('span','emptyicon','✦'),node('b','','새로운 AI 정리 내용이 없습니다'),node('p','','녹음 후 잠시 기다리거나 「지금 AI 정리」를 누르세요.'));empty.append(inside);box.append(empty);return;}
+  box.append(node('div','summaryStamp','반영 원문: '+summary.lastSequence+'문장 · '+formatTime(summary.createdAt)));
+  // Markdown의 기본 문단/제목/목록만 DOM으로 안전하게 구성합니다. HTML 삽입은 사용하지 않습니다.
+  const article=node('article','summaryText');
+  for(const raw of summary.text.split('\n')){
+    const line=raw.trim();
+    if(!line){article.append(node('div','summaryGap',' '));continue;}
+    const heading=line.match(/^(#{1,4})\s+(.+)$/);
+    if(heading){article.append(node(heading[1].length<=2?'h3':'h4','',heading[2]));continue;}
+    if(/^[-*]\s+/.test(line)){article.append(node('div','sumBullet',line.replace(/^[-*]\s+/,'')));continue;}
+    if(/^\d+[.)]\s+/.test(line)){article.append(node('div','sumOrdered',line));continue;}
+    article.append(node('div','sumParagraph',line));
+  }
+  box.append(article);box.scrollTop=0;
+}
+function usePayload(payload){app.sessions=payload.sessions||[];app.selected=payload.selected||null;app.queue=[];app.loaded=true;
+  renderSessions();renderTranscript();renderSummary(app.selected&&app.selected.summary||null);
+  $('startBtn').disabled=!app.selected;$('summarizeBtn').disabled=!app.selected;
+  setRecordStatus(app.selected?'녹음 대기 · 준비됨':'새 기록을 만들어 주세요');
+  displaySave('Google Sheets 자동 저장');setAlert('');}
+async function bootstrap(){try{
+    const data=await callGS('getBootstrap');app.recorderUrl=data.recorderUrl||'';usePayload(data);
+    if(!app.selected){$('newSessionModal').hidden=false;$('newTitle').value='새로운 수업 기록';}
+    if(!app.recorderUrl)setAlert('GAS 웹앱 보안 정책에 따라 마이크 권한이 차단될 수 있습니다. 차단되면 Code.gs의 RECORDER_URL에 외부 HTTPS 녹음창 주소를 등록하세요.');
+  }catch(err){setRecordStatus('초기화 실패');setAlert('초기화 실패: '+(err.message||'스프레드시트 접근 권한을 확인하세요.'),'alert');toast('앱 초기화에 실패했습니다.');}}
+function ensureCanSwitch(){if(app.listening){toast('녹음을 정지한 다음 기록을 바꾸세요.');return false;}if(app.flushPromise||app.queue.length){toast('저장 중입니다. 저장이 끝나면 기록을 바꿔 주세요.');return false;}return true;}
+async function switchSession(id){if(!ensureCanSwitch()){renderSessions();return;}try{displaySave('기록 불러오는 중...');usePayload(await callGS('getRecordingSession',id));}catch(err){displaySave('조회 실패');toast(err.message||'기록을 불러오지 못했습니다.');renderSessions();}}
+function acceptFinal(text,eventId){if(!app.selected)return;const input=clean(text);if(!input)return;
+  const id=eventId||token();if(app.segmentIds.has(id)||app.queue.some(x=>x.eventId===id))return;
+  const pieces=input.match(/[\s\S]{1,600}/g)||[];
+  pieces.forEach((part,i)=>{const partId=i===0?id:token();const row={eventId:partId,text:part.trim()};if(!row.text)return;
+    app.queue.push(row);app.selected.totalSegments++;addTranscriptDOM(row.text,new Date().toISOString(),partId);});
+  $('segmentCount').textContent=app.selected.totalSegments+'문장';displaySave('저장 대기 '+app.queue.length+'문장');clearTimeout(acceptFinal.timer);acceptFinal.timer=setTimeout(()=>flushQueue(),2000);
+}
+async function flushQueue(){if(app.flushPromise)return app.flushPromise;if(!app.queue.length||!app.selected)return;
+  const sessionId=app.selected.id;app.flushPromise=(async()=>{
+    while(app.queue.length){const batch=app.queue.slice(0,18);
+      try{const res=await callGS('appendTranscriptSegments',sessionId,batch);
+        const acknowledged=new Set((res.acknowledgements||[]).map(x=>x.eventId));
+        if(batch.some(x=>!acknowledged.has(x.eventId)))throw new Error('저장 확인 정보가 일치하지 않습니다.');
+        app.queue.splice(0,batch.length);displaySave('저장 완료 · 대기 '+app.queue.length+'문장');
+      }catch(err){displaySave('저장 실패 · '+app.queue.length+'문장 대기');setAlert('원문 저장이 실패했습니다. 네트워크 연결을 확인하고 「지금 AI 정리」를 눌러 재시도하세요. 페이지를 닫으면 미저장 내용이 사라질 수 있습니다.','alert');throw err;}
+    }
+  })();try{await app.flushPromise;}finally{app.flushPromise=null;}}
+async function summarize(manual=false){if(!app.selected||app.summaryBusy)return;
+  app.summaryBusy=true;$('summarizeBtn').disabled=true;$('summarizeBtn').textContent='AI 정리 중...';
+  try{await flushQueue();const res=await callGS('summarizeRecordingSession',app.selected.id);
+    if(res.summary)renderSummary(res.summary);
+    if(res.status==='updated'){setAlert(res.remainingCount?'이번 정리에 '+res.remainingCount+'개 문장이 아직 포함되지 않았습니다. 다음 정리에서 이어서 반영합니다.':'');toast('AI 정리본을 갱신했습니다.');}
+    else if(manual){toast(res.status==='nochange'?'새로 정리할 문장이 없습니다.':res.status==='cooldown'?'API 호출 간격 제한: 잠시 후 다시 시도하세요.':'다른 AI 정리 요청이 진행 중입니다.');}
+  }catch(err){setAlert('AI 정리에 실패했습니다: '+(err.message||'API 상태를 확인하세요.'),'alert');if(manual)toast('AI 정리에 실패했습니다.');}
+  finally{app.summaryBusy=false;$('summarizeBtn').disabled=!app.selected;$('summarizeBtn').textContent='✦ 지금 AI 정리';}
+}
+function speechError(text,fatal){setRecordStatus(fatal?'마이크 사용 중단: '+text:'마이크 오류: '+text,!fatal&&app.listening);setAlert(text,'alert');if(fatal&&app.speech)app.speech.stop();}
+function openExternalRecorder(){if(!app.recorderUrl)return false;
+  const url=new URL(app.recorderUrl);app.recorderOrigin=url.origin;app.recorderNonce=token();
+  url.searchParams.set('recorder','1');url.searchParams.set('parentOrigin',location.origin);url.searchParams.set('nonce',app.recorderNonce);
+  const child=window.open(url.toString(),'LIVE_NOTE_RECORDER','width=640,height=760,resizable=yes,scrollbars=yes');
+  if(!child){toast('팝업이 차단되었습니다. 이 사이트의 팝업을 허용해 주세요.');return false;}
+  app.recorderWindow=child;setRecordStatus('외부 녹음창에서 「마이크 시작」을 누르세요',false);
+  return true;
+}
+function startRecording(){if(!app.selected)return;if(app.recorderUrl){openExternalRecorder();return;}
+  if(!app.speech){app.speech=new LiveSpeech(
+    text=>acceptFinal(text),
+    text=>showInterim(text),
+    running=>{setRecordStatus(running?'녹음 중 · 마이크 입력 수신':'녹음 연결 중...',running);},
+    (err,fatal)=>speechError(err,fatal)
+  );}
+  if(app.speech.start()){setRecordStatus('마이크 연결 중...');setAlert('');}
+}
+function stopRecording(){if(app.speech)app.speech.stop();if(app.recorderWindow&&!app.recorderWindow.closed){
+  app.recorderWindow.postMessage({type:'recorder-stop',nonce:app.recorderNonce},app.recorderOrigin);
+}setRecordStatus('녹음 정지 · 필요할 때 다시 시작하세요');showInterim('');flushQueue().catch(()=>{});}
+function onRecorderMessage(event){if(!app.recorderWindow||event.source!==app.recorderWindow||event.origin!==app.recorderOrigin)return;
+  const m=event.data;if(!m||typeof m!=='object'||m.nonce!==app.recorderNonce)return;
+  if(m.type==='recorder-ready'){
+    app.recorderWindow.postMessage({type:'recorder-hello',nonce:app.recorderNonce},app.recorderOrigin);
+  }else if(m.type==='recorder-started'){setRecordStatus('녹음 중 · 외부 마이크 연결됨',true);setAlert('');}
+  else if(m.type==='recorder-stopped'){setRecordStatus('외부 마이크 정지');showInterim('');flushQueue().catch(()=>{});}
+  else if(m.type==='recorder-interim'){showInterim(String(m.text||'').slice(0,1000));}
+  else if(m.type==='recorder-error'){speechError(String(m.message||'마이크 오류').slice(0,200),Boolean(m.fatal));}
+  else if(m.type==='recorder-final'){
+    if(typeof m.text==='string'&&m.text.length<=3000&&typeof m.eventId==='string'&&/^[A-Za-z0-9_-]{16,100}$/.test(m.eventId)){
+      acceptFinal(m.text,m.eventId);
+      app.recorderWindow.postMessage({type:'recorder-ack',nonce:app.recorderNonce,eventId:m.eventId},app.recorderOrigin);
+    }
+  }
+}
+function setupDashboard(){window.addEventListener('message',onRecorderMessage);
+  $('sessionSelect').addEventListener('change',e=>switchSession(e.target.value));
+  $('newSessionBtn').addEventListener('click',()=>{if(!ensureCanSwitch())return;$('newTitle').value='';$('newSessionModal').hidden=false;$('newTitle').focus();});
+  $('cancelNew').addEventListener('click',()=>{$('newSessionModal').hidden=true;});
+  $('confirmNew').addEventListener('click',async()=>{const title=clean($('newTitle').value),mode=$('newMode').value;
+    if(!title){toast('기록 제목을 입력하세요.');return;}const b=$('confirmNew');b.disabled=true;
+    try{usePayload(await callGS('createRecordingSession',title,mode));$('newSessionModal').hidden=true;}
+    catch(err){toast(err.message||'기록을 만들지 못했습니다.');}finally{b.disabled=false;}
+  });
+  $('newTitle').addEventListener('keydown',e=>{if(e.key==='Enter')$('confirmNew').click();});
+  $('startBtn').addEventListener('click',startRecording);
+  $('stopBtn').addEventListener('click',stopRecording);
+  $('addManualBtn').addEventListener('click',()=>{if(!app.selected)return toast('먼저 새 기록을 만드세요.');const value=clean($('manualText').value);if(!value)return toast('추가할 문장을 입력하세요.');acceptFinal(value);$('manualText').value='';flushQueue().catch(err=>toast(err.message||'저장에 실패했습니다.'));});
+  $('summarizeBtn').addEventListener('click',()=>summarize(true));
+  $('copySummary').addEventListener('click',async()=>{if(!app.summaryText)return toast('복사할 요약이 없습니다.');try{await navigator.clipboard.writeText(app.summaryText);toast('AI 정리를 복사했습니다.');}catch(_){toast('복사가 차단되었습니다. 요약을 직접 선택해 복사해 주세요.');}});
+  app.summaryTimer=setInterval(()=>{if($('autoSummary').checked&&app.selected&&app.queue.length===0){
+    if(app.selected.totalSegments>app.lastSummarizedSequence) summarize(false);
+  }},60000);
+  window.addEventListener('beforeunload',e=>{if(app.queue.length||app.listening){e.preventDefault();e.returnValue='';}});
+  window.addEventListener('visibilitychange',()=>{if(document.visibilityState==='hidden'&&app.queue.length)flushQueue().catch(()=>{});});
+  bootstrap();
+}
+
+function setupRecorder(){
+  $('dashboard').hidden=true;$('recorderWindow').hidden=false;
+  const parentOrigin=params.get('parentOrigin')||'',nonce=params.get('nonce')||'';
+  let permittedOrigin;
+  try{permittedOrigin=new URL(parentOrigin).origin;}catch(_){permittedOrigin='';}
+  if(!permittedOrigin||!/^https:\/\//.test(permittedOrigin)||!window.opener||!nonce||nonce.length>100){
+    $('recStatus').textContent='메인 웹앱 연결이 없습니다. 반드시 메인 화면에서 「녹음 시작」으로 열어 주세요.';
+    $('recStart').disabled=true;return;
+  }
+  let paired=false,confirmed=0,pending=new Map();
+  function send(type,values={}){if(!window.opener)return;window.opener.postMessage(Object.assign({type,nonce},values),permittedOrigin);}
+  function flushOutbound(){if(!paired)return;for(const [eventId,text] of pending)send('recorder-final',{eventId,text});}
+  const helloTimer=setInterval(()=>{if(!paired){send('recorder-ready');}else flushOutbound();},1300);send('recorder-ready');
+  window.addEventListener('message',event=>{
+    if(event.source!==window.opener||event.origin!==permittedOrigin)return;
+    const m=event.data;if(!m||m.nonce!==nonce)return;
+    if(m.type==='recorder-hello'){paired=true;$('recStatus').textContent='● 메인 화면과 연결됨 · 마이크를 시작하세요';flushOutbound();}
+    if(m.type==='recorder-ack'&&pending.has(m.eventId)){pending.delete(m.eventId);confirmed++;$('recCount').textContent='전송 확인: '+confirmed+'개 · 미확인: '+pending.size+'개';}
+    if(m.type==='recorder-stop'&&speech)speech.stop();
+  });
+  const speech=new LiveSpeech(text=>{
+    const eventId=token();pending.set(eventId,text);$('recPreview').textContent=text;
+    $('recCount').textContent='전송 확인: '+confirmed+'개 · 미확인: '+pending.size+'개';
+    if(pending.size>250){speech.stop();$('recStatus').textContent='전송 대기 문장이 너무 많아 녹음을 정지했습니다. 연결을 확인하세요.';return;}flushOutbound();
+  },text=>{if(text)$('recPreview').textContent='인식 중: '+text;},running=>{
+    $('recStart').disabled=running;$('recStop').disabled=!running;
+    $('recStatus').textContent=running?'● 마이크 녹음 중 · 메인 화면에 전송 중':'■ 녹음 중지됨';
+    if(running)send('recorder-started');else send('recorder-stopped');
+  },(error,fatal)=>{$('recStatus').textContent=error;send('recorder-error',{message:error,fatal});});
+  $('recStart').addEventListener('click',()=>{if(!paired){toast('메인 화면 연결을 확인하세요.');return;}speech.start();});
+  $('recStop').addEventListener('click',()=>speech.stop());
+  window.addEventListener('beforeunload',e=>{if(speech.want||pending.size){e.preventDefault();e.returnValue='';}});
+}
+if(isRecorder)setupRecorder();else setupDashboard();
+</script>
+</body>
+</html>
