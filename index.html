@@ -72,38 +72,123 @@ function callGS(name,...args){return new Promise((resolve,reject)=>{
   google.script.run.withSuccessHandler(resolve).withFailureHandler(reject)[name](...args);
 });}
 
-/** Web Speech API: Chrome/Edge 우선. 음성 확정 결과와 임시 결과를 분리합니다. */
+/**
+ * 인식기 수명 주기 관리: 단일 인스턴스, 최대 4회/분 재시작,
+ * STOP 뒤 재시작 금지, onend/타이머/핸들러 해제.
+ */
 class LiveSpeech {
-  constructor(onFinal,onInterim,onState,onError){this.onFinal=onFinal;this.onInterim=onInterim;this.onState=onState;this.onError=onError;this.instance=null;this.want=false;this.restartTimer=null;this.finalIndexes=new Set();this.errors=0;}
-  start(){if(!SpeechAPI){this.onError('이 브라우저에서는 SpeechRecognition을 지원하지 않습니다. 최신 Chrome 또는 Edge를 사용하세요.',true);return false;}
-    if(this.want) return true;
-    this.want=true;this.errors=0;this.spawn();return true;
+  constructor(onFinal,onInterim,onState,onError){
+    this.onFinal=onFinal;this.onInterim=onInterim;this.onState=onState;this.onError=onError;
+    this.instance=null;this.want=false;this.disposed=false;this.restartTimer=null;
+    this.stopWatchdog=null;this.retryTimes=[];this.startedAt=0;this.generation=0;
+    this.finalIndexes=new Set();this.starting=false;
   }
-  spawn(){if(!this.want)return;
-    const rec=new SpeechAPI();this.instance=rec;this.finalIndexes.clear();rec.lang='ko-KR';rec.continuous=true;rec.interimResults=true;rec.maxAlternatives=1;
-    rec.onstart=()=>{this.errors=0;this.onState(true);};
-    rec.onresult=event=>{let interim='';for(let i=event.resultIndex;i<event.results.length;i++){
-      const result=event.results[i];const t=result[0]&&result[0].transcript?result[0].transcript.trim():'';
-      if(!t)continue;
-      if(result.isFinal){if(!this.finalIndexes.has(i)){this.finalIndexes.add(i);this.onFinal(t);}}
-      else interim+=(interim?' ':'')+t;
-    }this.onInterim(interim);};
-    rec.onerror=event=>{const code=event&&event.error||'unknown';
+  start(){
+    if(this.disposed)return false;
+    if(!SpeechAPI){this.onError('음성 인식 기능을 지원하지 않습니다. Chrome 또는 Edge를 사용하세요.',true);return false;}
+    if(this.want || this.instance || this.starting)return false;
+    this.want=true;this.retryTimes=[];this.generation++;
+    this.spawn();return true;
+  }
+  spawn(){
+    if(!this.want||this.disposed||this.instance||this.starting)return;
+    this.starting=true;
+    const gen=this.generation;
+    let rec;
+    try {rec=new SpeechAPI();} catch (_) {
+      this.starting=false;this.halt('음성 인식기를 만들지 못했습니다.');return;
+    }
+    this.instance=rec;this.finalIndexes.clear();this.startedAt=Date.now();
+    rec.lang='ko-KR';rec.continuous=true;rec.interimResults=true;rec.maxAlternatives=1;
+    rec.onstart=()=>{
+      if(gen!==this.generation||!this.want)return;
+      this.starting=false;this.startedAt=Date.now();this.onState('active');
+    };
+    rec.onresult=event=>{
+      if(gen!==this.generation||this.disposed)return;
+      let interim='';
+      for(let i=event.resultIndex;i<event.results.length;i++){
+        const result=event.results[i];
+        const t=result[0]&&result[0].transcript?result[0].transcript.trim():'';
+        if(!t)continue;
+        if(result.isFinal){
+          if(!this.finalIndexes.has(i)){
+            this.finalIndexes.add(i);
+            this.onFinal(t);
+          }
+        }else if(this.want){interim+=(interim?' ':'')+t;}
+      }
+      if(this.want)this.onInterim(interim);
+    };
+    rec.onerror=event=>{
+      if(gen!==this.generation||this.disposed)return;
+      const code=String(event&&event.error||'unknown');
+      if(code==='aborted'&&!this.want)return;
       if(code==='no-speech'||code==='aborted')return;
-      this.errors++;
-      const fatal=['not-allowed','service-not-allowed','audio-capture','language-not-supported'].includes(code) || (code==='network'&&this.errors>=3);
-      if(fatal)this.want=false;
-      const help=(code==='not-allowed'||code==='service-not-allowed'||code==='audio-capture')?'마이크 권한 또는 iframe 보안 정책으로 차단되었습니다. HTTPS 외부 녹음창을 사용하세요.':'음성 인식 오류: '+code;
+      const fatal=['not-allowed','service-not-allowed','audio-capture','language-not-supported'].includes(code);
+      const help=fatal?'마이크 접근이 차단되었습니다. HTTPS 녹음창의 사이트 권한을 확인하세요.':'음성 인식 오류: '+code;
+      if(fatal){this.want=false;clearTimeout(this.restartTimer);}
       this.onError(help,fatal);
     };
-    rec.onend=()=>{this.onState(false);this.onInterim('');if(this.want){this.restartTimer=setTimeout(()=>this.spawn(),750);}};
-    try{rec.start();}catch(err){this.want=false;this.onState(false);this.onError('마이크를 시작할 수 없습니다. 브라우저 권한을 확인하세요.',true);}
+    rec.onend=()=>{
+      if(gen!==this.generation)return;
+      this.detach(rec);this.instance=null;this.starting=false;
+      clearTimeout(this.stopWatchdog);this.stopWatchdog=null;
+      this.onInterim('');
+      if(!this.want||this.disposed){this.onState('idle');return;}
+      // 짧은 시간에 반복 재시작하면 음성 서비스/브라우저를 과도하게 점유할 수 있으므로 중단.
+      const now=Date.now();
+      if(now-this.startedAt>45000)this.retryTimes=[];
+      this.retryTimes=this.retryTimes.filter(t=>now-t<60000);
+      if(this.retryTimes.length>=4){
+        this.want=false;this.onState('idle');
+        this.onError('음성 인식이 짧은 시간에 반복 종료되어 안전하게 중지했습니다. 마이크·인터넷 상태를 점검한 뒤 다시 시작하세요.',true);
+        return;
+      }
+      this.retryTimes.push(now);
+      const delay=Math.min(1200*Math.pow(2,this.retryTimes.length-1),7000);
+      this.onState('recovering');
+      this.restartTimer=setTimeout(()=>{this.restartTimer=null;this.spawn();},delay);
+    };
+    try{rec.start();}catch(_){
+      this.want=false;this.detach(rec);this.instance=null;this.starting=false;
+      this.onState('idle');this.onError('마이크를 시작하지 못했습니다. 브라우저 권한을 확인하세요.',true);
+    }
   }
-  stop(){this.want=false;clearTimeout(this.restartTimer);if(this.instance){try{this.instance.stop();}catch(_){} }this.onInterim('');}
+  detach(rec){if(!rec)return;rec.onstart=null;rec.onend=null;rec.onerror=null;rec.onresult=null;}
+  halt(message){this.want=false;this.onState('idle');this.onError(message,true);}
+  stop(){
+    this.want=false;clearTimeout(this.restartTimer);this.restartTimer=null;
+    this.onInterim('');
+    if(!this.instance){this.starting=false;this.onState('idle');return;}
+    const rec=this.instance;
+    this.onState('stopping');
+    try{rec.stop();}catch(_){this.detach(rec);this.instance=null;this.starting=false;this.onState('idle');return;}
+    clearTimeout(this.stopWatchdog);
+    this.stopWatchdog=setTimeout(()=>{
+      if(this.instance!==rec)return;
+      this.detach(rec);this.instance=null;this.starting=false;
+      try{rec.abort();}catch(_){}
+      this.onState('idle');
+    },2500);
+  }
+  dispose(){
+    this.disposed=true;this.want=false;this.generation++;
+    clearTimeout(this.restartTimer);clearTimeout(this.stopWatchdog);
+    this.restartTimer=null;this.stopWatchdog=null;
+    const rec=this.instance;this.instance=null;this.starting=false;
+    if(rec){this.detach(rec);try{rec.abort();}catch(_){}}
+  }
 }
 
-const app={selected:null,sessions:[],recorderUrl:'',recorderWindow:null,recorderOrigin:'',recorderNonce:'',speech:null,listening:false,segmentIds:new Set(),queue:[],flushPromise:null,summaryBusy:false,loaded:false,summaryTimer:null,summaryText:'',lastSummarizedSequence:0,disableSwitch:false};
-function setRecordStatus(msg,active=false){$('recordStatus').textContent=msg;$('liveDot').classList.toggle('on',active);$('startBtn').disabled=!app.loaded||!app.selected||active;$('stopBtn').disabled=!app.loaded||!active;app.listening=active;}
+const app={selected:null,sessions:[],recorderUrl:'',recorderWindow:null,recorderOrigin:'',recorderNonce:'',recorderPending:false,recorderActive:false,connectionTimer:null,speech:null,listening:false,segmentIds:new Set(),savedIds:new Set(),queue:[],flushPromise:null,summaryBusy:false,loaded:false,summaryTimer:null,summaryText:'',lastSummarizedSequence:0,closing:false};
+function setRecordStatus(msg,active=false){
+  $('recordStatus').textContent=msg;$('liveDot').classList.toggle('on',active);
+  const busy=Boolean((app.speech&&app.speech.want)||app.recorderPending||app.recorderActive);
+  $('startBtn').disabled=!app.loaded||!app.selected||busy;
+  $('stopBtn').disabled=!app.loaded||!busy;
+  app.listening=busy;
+}
 function displaySave(msg){$('saveStatus').textContent=msg;}
 function setAlert(msg,kind='warning'){$('panelAlert').hidden=!msg;$('panelAlert').textContent=msg;$('panelAlert').className=kind;}
 function renderSessions(){const sel=$('sessionSelect');sel.replaceChildren();if(!app.sessions.length){sel.append(node('option','', '먼저 새 기록을 만드세요'));sel.value='';return;}
@@ -142,8 +227,34 @@ function renderSummary(summary){const box=$('summaryBody');box.replaceChildren()
   }
   box.append(article);box.scrollTop=0;
 }
+// 브라우저 강제 종료 등에서도 미저장 원문을 복원합니다. 사용자의 해당 브라우저에만 저장됩니다.
+function queueKey(id){return 'LIVE_NOTE_PENDING_V2_'+id;}
+function persistQueue(){
+  if(!app.selected)return;
+  try{
+    const key=queueKey(app.selected.id);
+    if(app.queue.length)localStorage.setItem(key,JSON.stringify(app.queue.slice(0,250)));
+    else localStorage.removeItem(key);
+  }catch(_){/* 브라우저 저장소 차단 시에도 GAS 저장은 계속 시도 */}
+}
+function restoreQueue(){
+  if(!app.selected)return;
+  let saved=[];
+  try{saved=JSON.parse(localStorage.getItem(queueKey(app.selected.id))||'[]');}catch(_){saved=[];}
+  if(!Array.isArray(saved))return;
+  for(const row of saved.slice(0,250)){
+    if(!row||typeof row.eventId!=='string'||!/^[A-Za-z0-9_-]{16,100}$/.test(row.eventId)||typeof row.text!=='string'||!row.text.trim()||row.text.length>650)continue;
+    if(app.segmentIds.has(row.eventId)||app.queue.some(e=>e.eventId===row.eventId))continue;
+    app.queue.push({eventId:row.eventId,text:row.text});
+    app.selected.totalSegments++;
+    addTranscriptDOM(row.text,new Date().toISOString(),row.eventId);
+  }
+  $('segmentCount').textContent=app.selected.totalSegments+'문장';
+  if(app.queue.length){displaySave('복구된 미저장 원문 '+app.queue.length+'문장');setTimeout(()=>flushQueue().catch(()=>{}),1000);}
+}
 function usePayload(payload){app.sessions=payload.sessions||[];app.selected=payload.selected||null;app.queue=[];app.loaded=true;
   renderSessions();renderTranscript();renderSummary(app.selected&&app.selected.summary||null);
+  app.savedIds.clear();restoreQueue();
   $('startBtn').disabled=!app.selected;$('summarizeBtn').disabled=!app.selected;
   setRecordStatus(app.selected?'녹음 대기 · 준비됨':'새 기록을 만들어 주세요');
   displaySave('Google Sheets 자동 저장');setAlert('');}
@@ -152,14 +263,14 @@ async function bootstrap(){try{
     if(!app.selected){$('newSessionModal').hidden=false;$('newTitle').value='새로운 수업 기록';}
     if(!app.recorderUrl)setAlert('GAS 웹앱 보안 정책에 따라 마이크 권한이 차단될 수 있습니다. 차단되면 Code.gs의 RECORDER_URL에 외부 HTTPS 녹음창 주소를 등록하세요.');
   }catch(err){setRecordStatus('초기화 실패');setAlert('초기화 실패: '+(err.message||'스프레드시트 접근 권한을 확인하세요.'),'alert');toast('앱 초기화에 실패했습니다.');}}
-function ensureCanSwitch(){if(app.listening){toast('녹음을 정지한 다음 기록을 바꾸세요.');return false;}if(app.flushPromise||app.queue.length){toast('저장 중입니다. 저장이 끝나면 기록을 바꿔 주세요.');return false;}return true;}
+function ensureCanSwitch(){if(app.recorderWindow&&!app.recorderWindow.closed){toast('안전을 위해 녹음창을 닫은 뒤 기록을 바꾸세요.');return false;}if(app.listening){toast('녹음을 정지한 다음 기록을 바꾸세요.');return false;}if(app.flushPromise||app.queue.length){toast('저장 중입니다. 저장이 끝나면 기록을 바꿔 주세요.');return false;}return true;}
 async function switchSession(id){if(!ensureCanSwitch()){renderSessions();return;}try{displaySave('기록 불러오는 중...');usePayload(await callGS('getRecordingSession',id));}catch(err){displaySave('조회 실패');toast(err.message||'기록을 불러오지 못했습니다.');renderSessions();}}
 function acceptFinal(text,eventId){if(!app.selected)return;const input=clean(text);if(!input)return;
   const id=eventId||token();if(app.segmentIds.has(id)||app.queue.some(x=>x.eventId===id))return;
   const pieces=input.match(/[\s\S]{1,600}/g)||[];
   pieces.forEach((part,i)=>{const partId=i===0?id:token();const row={eventId:partId,text:part.trim()};if(!row.text)return;
     app.queue.push(row);app.selected.totalSegments++;addTranscriptDOM(row.text,new Date().toISOString(),partId);});
-  $('segmentCount').textContent=app.selected.totalSegments+'문장';displaySave('저장 대기 '+app.queue.length+'문장');clearTimeout(acceptFinal.timer);acceptFinal.timer=setTimeout(()=>flushQueue(),2000);
+  $('segmentCount').textContent=app.selected.totalSegments+'문장';displaySave('저장 대기 '+app.queue.length+'문장');persistQueue();clearTimeout(acceptFinal.timer);acceptFinal.timer=setTimeout(()=>flushQueue(),2000);
 }
 async function flushQueue(){if(app.flushPromise)return app.flushPromise;if(!app.queue.length||!app.selected)return;
   const sessionId=app.selected.id;app.flushPromise=(async()=>{
@@ -167,7 +278,15 @@ async function flushQueue(){if(app.flushPromise)return app.flushPromise;if(!app.
       try{const res=await callGS('appendTranscriptSegments',sessionId,batch);
         const acknowledged=new Set((res.acknowledgements||[]).map(x=>x.eventId));
         if(batch.some(x=>!acknowledged.has(x.eventId)))throw new Error('저장 확인 정보가 일치하지 않습니다.');
-        app.queue.splice(0,batch.length);displaySave('저장 완료 · 대기 '+app.queue.length+'문장');
+        app.queue.splice(0,batch.length);persistQueue();
+        for(const item of batch){
+          app.savedIds.add(item.eventId);
+          if(app.recorderWindow&&!app.recorderWindow.closed&&app.recorderOrigin){
+            try{app.recorderWindow.postMessage({type:'recorder-ack',nonce:app.recorderNonce,eventId:item.eventId},app.recorderOrigin);}catch(_){}
+          }
+        }
+        if(app.savedIds.size>3000)app.savedIds.clear();
+        displaySave('저장 완료 · 대기 '+app.queue.length+'문장');
       }catch(err){displaySave('저장 실패 · '+app.queue.length+'문장 대기');setAlert('원문 저장이 실패했습니다. 네트워크 연결을 확인하고 「지금 AI 정리」를 눌러 재시도하세요. 페이지를 닫으면 미저장 내용이 사라질 수 있습니다.','alert');throw err;}
     }
   })();try{await app.flushPromise;}finally{app.flushPromise=null;}}
@@ -180,42 +299,107 @@ async function summarize(manual=false){if(!app.selected||app.summaryBusy)return;
   }catch(err){setAlert('AI 정리에 실패했습니다: '+(err.message||'API 상태를 확인하세요.'),'alert');if(manual)toast('AI 정리에 실패했습니다.');}
   finally{app.summaryBusy=false;$('summarizeBtn').disabled=!app.selected;$('summarizeBtn').textContent='✦ 지금 AI 정리';}
 }
-function speechError(text,fatal){setRecordStatus(fatal?'마이크 사용 중단: '+text:'마이크 오류: '+text,!fatal&&app.listening);setAlert(text,'alert');if(fatal&&app.speech)app.speech.stop();}
-function openExternalRecorder(){if(!app.recorderUrl)return false;
+function speechError(text,fatal){
+  if(fatal){app.recorderActive=false;app.recorderPending=false;}
+  setRecordStatus(fatal?'마이크 중지: '+text:'음성 오류: '+text);
+  setAlert(text,'alert');
+  if(fatal&&app.speech)app.speech.stop();
+}
+function sendToRecorder(type,body={}){
+  if(!app.recorderWindow||app.recorderWindow.closed||!app.recorderOrigin)return false;
+  try{app.recorderWindow.postMessage(Object.assign({type,nonce:app.recorderNonce},body),app.recorderOrigin);return true;}catch(_){return false;}
+}
+function stopMonitor(){if(app.connectionTimer!==null){clearInterval(app.connectionTimer);app.connectionTimer=null;}}
+function clearRecorderReference(){
+  stopMonitor();app.recorderWindow=null;app.recorderPending=false;app.recorderActive=false;
+  app.recorderNonce='';app.recorderOrigin='';
+}
+function openExternalRecorder(){
+  if(!app.recorderUrl||app.closing)return false;
+  if(app.recorderWindow&&!app.recorderWindow.closed){
+    try{app.recorderWindow.focus();}catch(_){}
+    toast('기존 녹음창을 확인하세요. 중복으로 열지 않습니다.');return false;
+  }
   const url=new URL(app.recorderUrl);app.recorderOrigin=url.origin;app.recorderNonce=token();
-  url.searchParams.set('recorder','1');url.searchParams.set('parentOrigin',location.origin);url.searchParams.set('nonce',app.recorderNonce);
+  url.searchParams.set('recorder','1');url.searchParams.set('parentOrigin',location.origin);
+  url.searchParams.set('nonce',app.recorderNonce);
   const child=window.open(url.toString(),'LIVE_NOTE_RECORDER','width=640,height=760,resizable=yes,scrollbars=yes');
-  if(!child){toast('팝업이 차단되었습니다. 이 사이트의 팝업을 허용해 주세요.');return false;}
-  app.recorderWindow=child;setRecordStatus('외부 녹음창에서 「마이크 시작」을 누르세요',false);
+  if(!child){clearRecorderReference();toast('팝업 차단을 해제해 주세요.');return false;}
+  app.recorderWindow=child;app.recorderPending=true;app.recorderActive=false;
+  setRecordStatus('녹음창이 열렸습니다. 외부 창에서 마이크 시작을 누르세요.');
+  stopMonitor();
+  app.connectionTimer=setInterval(()=>{
+    if(app.closing)return;
+    if(!app.recorderWindow||app.recorderWindow.closed){
+      clearRecorderReference();setRecordStatus('녹음창이 닫혔습니다.');showInterim('');
+      flushQueue().catch(()=>{});return;
+    }
+    sendToRecorder('recorder-ping');
+  },2500);
   return true;
 }
-function startRecording(){if(!app.selected)return;if(app.recorderUrl){openExternalRecorder();return;}
+function startRecording(){
+  if(!app.selected||app.closing||app.listening)return;
+  if(app.recorderUrl){openExternalRecorder();return;}
   if(!app.speech){app.speech=new LiveSpeech(
-    text=>acceptFinal(text),
-    text=>showInterim(text),
-    running=>{setRecordStatus(running?'녹음 중 · 마이크 입력 수신':'녹음 연결 중...',running);},
-    (err,fatal)=>speechError(err,fatal)
+    text=>acceptFinal(text),text=>showInterim(text),
+    state=>{
+      const labels={active:'녹음 중 · 마이크 입력 수신',recovering:'음성 인식 재연결 중 (재시작 횟수 제한)',idle:'녹음 정지'};
+      setRecordStatus(labels[state]||'연결 중...',state==='active');
+    },(err,fatal)=>speechError(err,fatal)
   );}
   if(app.speech.start()){setRecordStatus('마이크 연결 중...');setAlert('');}
 }
-function stopRecording(){if(app.speech)app.speech.stop();if(app.recorderWindow&&!app.recorderWindow.closed){
-  app.recorderWindow.postMessage({type:'recorder-stop',nonce:app.recorderNonce},app.recorderOrigin);
-}setRecordStatus('녹음 정지 · 필요할 때 다시 시작하세요');showInterim('');flushQueue().catch(()=>{});}
-function onRecorderMessage(event){if(!app.recorderWindow||event.source!==app.recorderWindow||event.origin!==app.recorderOrigin)return;
+function stopRecording(){
+  if(app.speech)app.speech.stop();
+  if(app.recorderWindow&&!app.recorderWindow.closed){
+    sendToRecorder('recorder-stop');
+    // 보낸 문장의 DB 저장 확인을 기다린 후 녹음창이 자동으로 닫힙니다.
+    setRecordStatus('녹음 중지 요청 · 저장 확인 중...');
+  }else {app.recorderPending=false;app.recorderActive=false;setRecordStatus('녹음 정지');}
+  showInterim('');clearTimeout(acceptFinal.timer);
+  flushQueue().catch(()=>{});
+}
+function onRecorderMessage(event){
+  if(!app.recorderWindow||event.source!==app.recorderWindow||event.origin!==app.recorderOrigin||app.closing)return;
   const m=event.data;if(!m||typeof m!=='object'||m.nonce!==app.recorderNonce)return;
-  if(m.type==='recorder-ready'){
-    app.recorderWindow.postMessage({type:'recorder-hello',nonce:app.recorderNonce},app.recorderOrigin);
-  }else if(m.type==='recorder-started'){setRecordStatus('녹음 중 · 외부 마이크 연결됨',true);setAlert('');}
-  else if(m.type==='recorder-stopped'){setRecordStatus('외부 마이크 정지');showInterim('');flushQueue().catch(()=>{});}
-  else if(m.type==='recorder-interim'){showInterim(String(m.text||'').slice(0,1000));}
-  else if(m.type==='recorder-error'){speechError(String(m.message||'마이크 오류').slice(0,200),Boolean(m.fatal));}
-  else if(m.type==='recorder-final'){
+  if(m.type==='recorder-ready'){sendToRecorder('recorder-hello');}
+  else if(m.type==='recorder-started'){
+    app.recorderActive=true;app.recorderPending=false;
+    setRecordStatus('녹음 중 · 외부 마이크 연결됨',true);setAlert('');
+  }else if(m.type==='recorder-stopped'){
+    app.recorderActive=false;app.recorderPending=false;
+    setRecordStatus('외부 마이크 정지 · 녹음창에서 다시 시작 가능');showInterim('');flushQueue().catch(()=>{});
+  }else if(m.type==='recorder-closed'){
+    clearRecorderReference();setRecordStatus('녹음창 종료됨');showInterim('');flushQueue().catch(()=>{});
+  }else if(m.type==='recorder-interim'){
+    showInterim(String(m.text||'').slice(0,1000));
+  }else if(m.type==='recorder-error'){
+    speechError(String(m.message||'마이크 오류').slice(0,200),Boolean(m.fatal));
+  }else if(m.type==='recorder-final'){
     if(typeof m.text==='string'&&m.text.length<=3000&&typeof m.eventId==='string'&&/^[A-Za-z0-9_-]{16,100}$/.test(m.eventId)){
-      acceptFinal(m.text,m.eventId);
-      app.recorderWindow.postMessage({type:'recorder-ack',nonce:app.recorderNonce,eventId:m.eventId},app.recorderOrigin);
+      if(app.savedIds.has(m.eventId))sendToRecorder('recorder-ack',{eventId:m.eventId});
+      else {
+        if(app.queue.length>240){stopRecording();setAlert('미저장 원문이 많아 녹음을 중단했습니다. 저장 상태를 확인하세요.','alert');return;}
+        acceptFinal(m.text,m.eventId);
+        // 서버 저장이 확인된 뒤에만 recorder-ack를 전송합니다.
+        clearTimeout(acceptFinal.timer);
+        acceptFinal.timer=setTimeout(()=>flushQueue().catch(()=>{}),350);
+      }
     }
   }
 }
+function shutdownDashboard(){
+  if(app.closing)return;app.closing=true;
+  clearTimeout(acceptFinal.timer);clearTimeout(toast.timer);
+  if(app.summaryTimer){clearInterval(app.summaryTimer);app.summaryTimer=null;}
+  if(app.speech){app.speech.dispose();app.speech=null;}
+  sendToRecorder('recorder-parent-exit');
+  stopMonitor();
+  persistQueue();
+  window.removeEventListener('message',onRecorderMessage);
+}
+
 function setupDashboard(){window.addEventListener('message',onRecorderMessage);
   $('sessionSelect').addEventListener('change',e=>switchSession(e.target.value));
   $('newSessionBtn').addEventListener('click',()=>{if(!ensureCanSwitch())return;$('newTitle').value='';$('newSessionModal').hidden=false;$('newTitle').focus();});
@@ -231,46 +415,147 @@ function setupDashboard(){window.addEventListener('message',onRecorderMessage);
   $('addManualBtn').addEventListener('click',()=>{if(!app.selected)return toast('먼저 새 기록을 만드세요.');const value=clean($('manualText').value);if(!value)return toast('추가할 문장을 입력하세요.');acceptFinal(value);$('manualText').value='';flushQueue().catch(err=>toast(err.message||'저장에 실패했습니다.'));});
   $('summarizeBtn').addEventListener('click',()=>summarize(true));
   $('copySummary').addEventListener('click',async()=>{if(!app.summaryText)return toast('복사할 요약이 없습니다.');try{await navigator.clipboard.writeText(app.summaryText);toast('AI 정리를 복사했습니다.');}catch(_){toast('복사가 차단되었습니다. 요약을 직접 선택해 복사해 주세요.');}});
-  app.summaryTimer=setInterval(()=>{if($('autoSummary').checked&&app.selected&&app.queue.length===0){
+  app.summaryTimer=setInterval(()=>{if(!app.closing&&document.visibilityState==='visible'&&$('autoSummary').checked&&app.selected&&app.queue.length===0){
     if(app.selected.totalSegments>app.lastSummarizedSequence) summarize(false);
   }},60000);
-  window.addEventListener('beforeunload',e=>{if(app.queue.length||app.listening){e.preventDefault();e.returnValue='';}});
-  window.addEventListener('visibilitychange',()=>{if(document.visibilityState==='hidden'&&app.queue.length)flushQueue().catch(()=>{});});
+  window.addEventListener('beforeunload',e=>{if(app.queue.length){e.preventDefault();e.returnValue='';}});
+  window.addEventListener('pagehide',shutdownDashboard);
+  window.addEventListener('visibilitychange',()=>{if(document.visibilityState==='hidden'&&app.queue.length){persistQueue();flushQueue().catch(()=>{});}});
   bootstrap();
 }
 
 function setupRecorder(){
   $('dashboard').hidden=true;$('recorderWindow').hidden=false;
   const parentOrigin=params.get('parentOrigin')||'',nonce=params.get('nonce')||'';
-  let permittedOrigin;
-  try{permittedOrigin=new URL(parentOrigin).origin;}catch(_){permittedOrigin='';}
-  if(!permittedOrigin||!/^https:\/\//.test(permittedOrigin)||!window.opener||!nonce||nonce.length>100){
-    $('recStatus').textContent='메인 웹앱 연결이 없습니다. 반드시 메인 화면에서 「녹음 시작」으로 열어 주세요.';
+  let permittedOrigin='';
+  try{const u=new URL(parentOrigin);permittedOrigin=u.protocol==='https:'?u.origin:'';}catch(_){}
+  // 임의 사이트로부터 연결되는 것을 제한하고, 충분히 긴 일회용 nonce를 요구합니다.
+  const host=permittedOrigin?new URL(permittedOrigin).hostname:'';
+  const authorizedHost=host==='script.google.com'||host.endsWith('.googleusercontent.com');
+  if(!permittedOrigin||!authorizedHost||!window.opener||!/^[A-Za-z0-9_-]{16,100}$/.test(nonce)){
+    $('recStatus').textContent='메인 웹앱과 연결되지 않았습니다. Apps Script 웹앱의 녹음 시작 버튼을 이용하세요.';
     $('recStart').disabled=true;return;
   }
-  let paired=false,confirmed=0,pending=new Map();
-  function send(type,values={}){if(!window.opener)return;window.opener.postMessage(Object.assign({type,nonce},values),permittedOrigin);}
-  function flushOutbound(){if(!paired)return;for(const [eventId,text] of pending)send('recorder-final',{eventId,text});}
-  const helloTimer=setInterval(()=>{if(!paired){send('recorder-ready');}else flushOutbound();},1300);send('recorder-ready');
-  window.addEventListener('message',event=>{
+  let paired=false,confirmed=0,stopping=false,closed=false,hasStopped=true;
+  let lastParentSeen=Date.now(),lastResend=0;
+  const pending=new Map();
+  let interval=null;
+  function send(type,values={}){
+    if(closed||!window.opener||window.opener.closed)return false;
+    try{window.opener.postMessage(Object.assign({type,nonce},values),permittedOrigin);return true;}catch(_){return false;}
+  }
+  function flushOutbound(){
+    if(!paired||closed)return;
+    // 한 번에 최대 25개만 전송하고, ACK가 오기 전 재전송은 5초 이상 간격을 둡니다.
+    let n=0;
+    for(const [eventId,text] of pending){
+      send('recorder-final',{eventId,text});
+      if(++n>=25)break;
+    }
+    lastResend=Date.now();
+  }
+  function updateCount(){ $('recCount').textContent='저장 확인: '+confirmed+'개 · 미저장: '+pending.size+'개'; }
+  function cleanup(){
+    if(closed)return;closed=true;
+    clearInterval(interval);clearTimeout(toast.timer);
+    window.removeEventListener('message',onMessage);
+    speech.dispose();
+  }
+  function safeClose(){
+    send('recorder-closed');cleanup();
+    try{window.close();}catch(_){}
+    $('recStatus').textContent='마이크와 연결이 종료되었습니다. 이 창을 닫아도 됩니다.';
+    $('recStart').disabled=true;$('recStop').disabled=true;
+  }
+  function maybeFinish(){
+    if(stopping&&hasStopped&&pending.size===0)safeClose();
+  }
+  function onMessage(event){
     if(event.source!==window.opener||event.origin!==permittedOrigin)return;
-    const m=event.data;if(!m||m.nonce!==nonce)return;
-    if(m.type==='recorder-hello'){paired=true;$('recStatus').textContent='● 메인 화면과 연결됨 · 마이크를 시작하세요';flushOutbound();}
-    if(m.type==='recorder-ack'&&pending.has(m.eventId)){pending.delete(m.eventId);confirmed++;$('recCount').textContent='전송 확인: '+confirmed+'개 · 미확인: '+pending.size+'개';}
-    if(m.type==='recorder-stop'&&speech)speech.stop();
-  });
+    const m=event.data;if(!m||typeof m!=='object'||m.nonce!==nonce)return;
+    lastParentSeen=Date.now();
+    if(m.type==='recorder-hello'){
+      paired=true;$('recStatus').textContent='● 메인 화면과 연결됨 · 마이크 시작을 누르세요';flushOutbound();
+    }else if(m.type==='recorder-ack'&&typeof m.eventId==='string'&&pending.has(m.eventId)){
+      pending.delete(m.eventId);confirmed++;updateCount();maybeFinish();
+    }else if(m.type==='recorder-stop'){
+      stopping=true;$('recStart').disabled=true;
+      if(speech.want||speech.instance)speech.stop();
+      else hasStopped=true;
+      maybeFinish();
+    }else if(m.type==='recorder-parent-exit'){
+      // 메인 화면이 닫히면 즉시 오디오 처리를 종료합니다.
+      // 서버 저장 전 문장이 있다면 자동으로 외부 전송하지 않습니다.
+      if(pending.size){
+        speech.stop();stopping=true;
+        $('recStatus').textContent='메인 화면이 닫혔습니다. 아직 저장 확인을 받지 못한 문장이 있습니다. 이 창을 바로 닫지 말고 아래 문장을 복사해 보관하세요.';
+        $('recPreview').textContent=[...pending.values()].join('\n');
+        $('recStart').disabled=true;$('recStop').disabled=true;
+        return;
+      }
+      safeClose();
+    }
+  }
   const speech=new LiveSpeech(text=>{
-    const eventId=token();pending.set(eventId,text);$('recPreview').textContent=text;
-    $('recCount').textContent='전송 확인: '+confirmed+'개 · 미확인: '+pending.size+'개';
-    if(pending.size>250){speech.stop();$('recStatus').textContent='전송 대기 문장이 너무 많아 녹음을 정지했습니다. 연결을 확인하세요.';return;}flushOutbound();
-  },text=>{if(text)$('recPreview').textContent='인식 중: '+text;},running=>{
-    $('recStart').disabled=running;$('recStop').disabled=!running;
-    $('recStatus').textContent=running?'● 마이크 녹음 중 · 메인 화면에 전송 중':'■ 녹음 중지됨';
-    if(running)send('recorder-started');else send('recorder-stopped');
-  },(error,fatal)=>{$('recStatus').textContent=error;send('recorder-error',{message:error,fatal});});
-  $('recStart').addEventListener('click',()=>{if(!paired){toast('메인 화면 연결을 확인하세요.');return;}speech.start();});
-  $('recStop').addEventListener('click',()=>speech.stop());
-  window.addEventListener('beforeunload',e=>{if(speech.want||pending.size){e.preventDefault();e.returnValue='';}});
+    if(closed||stopping)return;
+    const eventId=token();pending.set(eventId,text);
+    $('recPreview').textContent=text;updateCount();
+    if(pending.size>=200){
+      stopping=true;hasStopped=false;speech.stop();
+      $('recStatus').textContent='미저장 문장이 많아 안전을 위해 마이크를 중지했습니다.';
+      return;
+    }
+    if(paired)flushOutbound();
+  },text=>{
+    if(!closed&&text)$('recPreview').textContent='인식 중: '+text;
+    if(!closed&&text)send('recorder-interim',{text:text.slice(0,1000)});
+  },state=>{
+    if(closed)return;
+    const active=state==='active',idle=state==='idle';
+    if(active)hasStopped=false;
+    if(idle)hasStopped=true;
+    $('recStart').disabled=!paired||stopping||!idle;
+    $('recStop').disabled=idle;
+    $('recStatus').textContent=active?'● 마이크 녹음 중':state==='recovering'?'음성 인식 재연결 중':'■ 녹음 중지됨';
+    if(active)send('recorder-started');
+    if(idle){send('recorder-stopped');maybeFinish();}
+  },(error,fatal)=>{
+    if(closed)return;
+    $('recStatus').textContent=error;
+    send('recorder-error',{message:error,fatal});
+    if(fatal){stopping=true;hasStopped=true;maybeFinish();}
+  });
+  window.addEventListener('message',onMessage);
+  $('recStart').addEventListener('click',()=>{
+    if(!paired||stopping||closed)return toast('메인 화면 연결을 확인해 주세요.');
+    if(speech.start()){$('recStart').disabled=true;$('recStatus').textContent='마이크 연결 중...';}
+  });
+  $('recStop').addEventListener('click',()=>{
+    if(!closed){speech.stop();}
+  });
+  updateCount();
+  interval=setInterval(()=>{
+    if(closed)return;
+    if(!window.opener||window.opener.closed|| (paired&&Date.now()-lastParentSeen>13000)){
+      $('recStatus').textContent='메인 화면 연결이 끊어져 마이크를 자동 종료했습니다.';
+      if(pending.size){
+        speech.stop();stopping=true;
+        $('recStatus').textContent='메인 화면과 연결이 끊겼습니다. 아래 미저장 문장을 복사해 보관하세요.';
+        $('recPreview').textContent=[...pending.values()].join('\n');
+        $('recStart').disabled=true;$('recStop').disabled=true;
+        clearInterval(interval);return;
+      }
+      safeClose();return;
+    }
+    if(!paired)send('recorder-ready');
+    else if(pending.size&&Date.now()-lastResend>5000)flushOutbound();
+  },2000);
+  send('recorder-ready');
+  window.addEventListener('pagehide',cleanup);
+  window.addEventListener('beforeunload',e=>{
+    // 손실 방지 경고는 아직 전송 완료되지 않은 문장이 있을 때만 표시.
+    if(pending.size){e.preventDefault();e.returnValue='';}
+  });
 }
 if(isRecorder)setupRecorder();else setupDashboard();
 </script>
