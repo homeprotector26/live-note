@@ -30,14 +30,18 @@
     .noteBody{line-height:1.85;white-space:pre-wrap;overflow-wrap:anywhere;font-size:14px;color:#3c4147}.noticeSection{background:#fff8db;border-color:#f1df9c}.noticeSection h3{font-size:18px}.noticeEntry{border-top:1px solid #e7d89d;padding:14px 0}.noticeEntry:first-of-type{border-top:0}.badge{display:inline-block;background:#fee500;border-radius:8px;padding:3px 7px;font-size:11px;font-weight:800;margin-right:7px}.noticeEntry strong{font-size:14px}.noticeEntry p{white-space:pre-wrap;line-height:1.8;font-size:13px;margin:7px 0}.noteMeta{font-size:11px;color:#767776;line-height:1.6}.correctionSection{background:#f3fbf8;border-color:#cbe9df}.correction{border-top:1px solid #cde5dd;padding:10px 0;font-size:13px;line-height:1.8}.correction:first-of-type{border-top:0}.correction em{font-style:normal;color:#b64744}.correction strong{color:#087a64}
     .contextHint{font-size:11px;color:#9b7f0e;padding:4px 12px;background:#fff7d4;border-radius:30px;white-space:nowrap;max-width:35vw;text-overflow:ellipsis;overflow:hidden}.modal textarea{width:100%;min-height:70px;max-height:180px;border:1px solid #e4e5e9;border-radius:12px;padding:11px 13px;resize:vertical}.modal.large{width:min(560px,100%);max-height:92dvh;overflow-y:auto}.requiredMark{color:#c84343}.modal .fieldHelp{font-size:11px;color:#777;margin:5px 0 1px}.sectionSeparator{font-size:11px;font-weight:850;letter-spacing:.7px;color:#777;margin:15px 0 10px}
   
-    .panel[aria-label="AI 수업 정리"] .panelbottom{max-height:55%;overflow-y:auto}.customArea{border-top:1px solid var(--line);padding-top:12px;margin-top:12px}
+    .customArea{margin-bottom:20px;border-bottom:1px solid var(--line);padding-bottom:12px}
     .customArea summary{cursor:pointer;font-weight:750;min-height:44px;padding:10px 0}
     .customArea textarea{width:100%;min-height:72px;border:1px solid #d8dbe0;border-radius:10px;padding:12px;resize:vertical}
-    .customChat,.customNotes{max-height:210px;overflow:auto;overflow-wrap:anywhere}
+    .customChat{max-height:160px;overflow:auto;overflow-wrap:anywhere}.customNotes{overflow-wrap:anywhere}
     .customMessage{background:#fff8d7;padding:10px 12px;border-radius:10px;white-space:pre-wrap;font-size:14px}
     .customArea label{display:block;font-size:13px;margin:12px 0 7px}
     .customTools{display:flex;flex-wrap:wrap;gap:8px;margin:8px 0}.customTools button{min-height:44px}
     .customNotes .noteBody{margin-bottom:16px}.customArea :focus-visible{outline:2px solid #a38b00;outline-offset:2px}
+    .summaryTabs{display:flex;gap:8px;padding:12px 17px 0;border-bottom:1px solid var(--line);flex-shrink:0;background:#fff}
+    .summaryTab{min-height:44px;border:1px solid #e7d77b;border-bottom:0;border-radius:10px 10px 0 0;padding:10px 18px;background:#fffdf3;color:#625005;font-weight:750}
+    .summaryTab[aria-selected="true"]{background:var(--yellow);color:var(--ink);border-color:#e1c900}
+    .summaryTab:focus-visible{outline:2px solid #887300;outline-offset:2px}
     @media(prefers-reduced-motion:reduce){*{scroll-behavior:auto!important;animation:none!important}}
   </style>
 </head>
@@ -61,13 +65,14 @@
     </section>
     <section class="panel" aria-label="AI 수업 정리">
       <div class="panelhead"><div class="panelname"><span class="panelicon ai">✦</span><div><h2>AI 실시간 정리</h2><p>수업 주제별 책갈피 · 문맥 교정 · 중요 공지 분리</p></div></div><span class="count" id="summaryVersion">아직 없음</span></div>
+      <div class="summaryTabs" role="tablist" aria-label="요약본 선택">
+        <button class="summaryTab" id="defaultSummaryTab" type="button" role="tab" aria-selected="true" aria-controls="summaryBody">기본요약</button>
+        <button class="summaryTab" id="customSummaryTab" type="button" role="tab" aria-selected="false" aria-controls="customSummaryPanel" tabindex="-1">지침요약</button>
+      </div>
       <nav class="bookmarkNav" id="bookmarkNav" aria-label="강의 내용 책갈피"><span class="bookmarkLabel">▣ 책갈피</span><span class="noteMeta">AI 정리 후 나타납니다</span></nav>
-      <div class="panelbody" id="summaryBody"><div class="empty"><div><span class="emptyicon">✦</span><b>기록이 쌓이면 정리를 시작해요</b><p>녹음 중 약 60초마다 새로운 내용을 기존 요약과 합쳐 갱신합니다.</p></div></div></div>
-      <div class="panelbottom">
-        <div id="panelAlert" class="warning" hidden></div>
-        <div class="aiactions"><button class="toolbtn primary" id="summarizeBtn" type="button" disabled>✦ 지금 AI 정리</button><label class="checkline"><input type="checkbox" id="autoSummary" checked>60초마다 자동 정리</label><button class="toolbtn mini" id="copySummary" type="button">요약 복사</button></div>
-        <small id="aiHelp">새 원문을 약 60초마다 누적 정리합니다. 책갈피를 누르면 해당 내용으로 이동합니다. AI 교정은 제안이며 원문을 변경하지 않습니다.</small>
-        <details class="customArea" open><summary>맞춤 AI 정리 · 채팅으로 지침 보내기</summary>
+      <div class="panelbody" id="summaryBody" role="tabpanel" aria-labelledby="defaultSummaryTab"><div class="empty"><div><span class="emptyicon">✦</span><b>기록이 쌓이면 정리를 시작해요</b><p>녹음 중 약 60초마다 새로운 내용을 기존 요약과 합쳐 갱신합니다.</p></div></div></div>
+      <div class="panelbody" id="customSummaryPanel" role="tabpanel" aria-labelledby="customSummaryTab" hidden>
+        <details class="customArea" id="customInstructions" open><summary>정리 지침 입력·변경</summary>
           <div id="customChat" class="customChat" role="log" aria-label="정리 지침 대화"></div>
           <label for="customInput">원하는 정리 기준</label>
           <textarea id="customInput" maxlength="2500" placeholder="예: 반대측 주장과 근거만 정리해 줘. 입장이 불명확한 발언은 따로 표시해 줘."></textarea>
@@ -75,12 +80,20 @@
             <button type="button" class="toolbtn mini" data-custom-example="토론에서 반대측 주장과 근거만 원문 번호와 함께 정리해 줘. 입장이 불명확하면 추측하지 마.">토론 · 반대측 주장</button>
             <button type="button" class="toolbtn mini" data-custom-example="교수님 발언 요약, 강의에서 흥미로운 부분, 질문할 만한 부분을 각각 나눠 정리해 줘. 질문은 AI 제안임을 표시해 줘.">강의 · 요약과 질문</button>
             <button type="button" class="toolbtn primary" id="customSend">지침 보내기</button>
-            <button type="button" class="toolbtn" id="customRun">지금 맞춤 정리</button>
+
           </div>
-          <p id="customStatus" class="noteMeta" role="status">지침을 입력하면 맞춤 정리를 시작합니다.</p>
-          <small>Enter로 전송 · Shift+Enter로 줄바꿈. 기본 AI 정리는 계속 유지됩니다. 지침을 바꾸면 기존 원문부터 다시 정리합니다. 자동 정리는 위 체크박스를 따릅니다.</small>
-          <div id="customNotes" class="customNotes" aria-label="맞춤 AI 정리 결과"></div>
+
+          <small>Enter로 전송 · Shift+Enter로 줄바꿈. 기본 AI 정리는 계속 유지됩니다. 지침을 바꾸면 기존 원문부터 다시 정리합니다. 자동 정리는 아래 체크박스를 따릅니다.</small>
+
         </details>
+        <p id="customStatus" class="noteMeta" role="status">지침을 입력하면 지침요약을 시작합니다.</p>
+        <div id="customNotes" class="customNotes" aria-label="지침요약 결과"></div>
+      </div>
+      <div class="panelbottom">
+        <div id="panelAlert" class="warning" hidden></div>
+        <div class="aiactions"><button class="toolbtn primary" id="summarizeBtn" type="button" disabled>✦ 지금 AI 정리</button><button type="button" class="toolbtn primary" id="customRun" hidden disabled>지금 지침요약</button><label class="checkline"><input type="checkbox" id="autoSummary" checked>60초마다 자동 정리</label><button class="toolbtn mini" id="copySummary" type="button">요약 복사</button></div>
+        <small id="aiHelp">새 원문을 약 60초마다 누적 정리합니다. 책갈피를 누르면 해당 내용으로 이동합니다. AI 교정은 제안이며 원문을 변경하지 않습니다.</small>
+
       </div>
     </section>
   </main>
@@ -536,7 +549,7 @@ function setupDashboard(){setupCustom();window.addEventListener('message',onReco
   $('stopBtn').addEventListener('click',stopRecording);
   $('addManualBtn').addEventListener('click',()=>{if(!app.selected)return toast('먼저 새 기록을 만드세요.');const value=clean($('manualText').value);if(!value)return toast('추가할 문장을 입력하세요.');acceptFinal(value);$('manualText').value='';flushQueue().catch(err=>toast(err.message||'저장에 실패했습니다.'));});
   $('summarizeBtn').addEventListener('click',()=>summarize(true));
-  $('copySummary').addEventListener('click',async()=>{if(!app.summaryText)return toast('복사할 요약이 없습니다.');try{await navigator.clipboard.writeText(app.summaryText);toast('AI 정리를 복사했습니다.');}catch(_){toast('복사가 차단되었습니다. 요약을 직접 선택해 복사해 주세요.');}});
+  $('copySummary').addEventListener('click',async()=>{const copyText=custom.tab==='custom'?(custom.state&&custom.state.notes||[]).map(n=>n.text).join('\n\n'):app.summaryText;if(!copyText)return toast('복사할 요약이 없습니다.');try{await navigator.clipboard.writeText(copyText);toast('AI 정리를 복사했습니다.');}catch(_){toast('복사가 차단되었습니다. 요약을 직접 선택해 복사해 주세요.');}});
   app.summaryTimer=setInterval(()=>{if(!app.closing&&document.visibilityState==='visible'&&$('autoSummary').checked&&app.selected&&app.queue.length===0){
     if(app.selected.totalSegments>app.lastSummarizedSequence) summarize(false);
     runCustom();
@@ -680,9 +693,26 @@ function setupRecorder(){
     if(pending.size){e.preventDefault();e.returnValue='';}
   });
 }
-const custom={state:null,busy:false,epoch:0};
+const custom={state:null,busy:false,epoch:0,tab:'default'};
+
+function selectSummaryTab(tab,focus=false){
+  custom.tab=tab;
+  const isCustom=tab==='custom';
+  $('summaryBody').hidden=isCustom;$('bookmarkNav').hidden=isCustom;
+  $('customSummaryPanel').hidden=!isCustom;$('summarizeBtn').hidden=isCustom;$('customRun').hidden=!isCustom;
+  $('summaryVersion').hidden=isCustom;$('aiHelp').hidden=isCustom;
+  for(const [id,selected] of [['defaultSummaryTab',!isCustom],['customSummaryTab',isCustom]]){
+    $(id).setAttribute('aria-selected',String(selected));$(id).tabIndex=selected?0:-1;
+    if(selected&&focus)$(id).focus();
+  }
+}
+function updateCustomControls(){
+  $('customRun').disabled=custom.busy||!app.selected||!custom.state||!custom.state.current;
+  $('customSend').disabled=custom.busy||!app.selected;
+}
+
 function renderCustom(state){
-  custom.state=state;
+  custom.state=state;updateCustomControls();$('customInstructions').open=!state.current;
   const chat=$('customChat'),notes=$('customNotes');chat.replaceChildren();notes.replaceChildren();
   for(const m of state.messages||[]){
     chat.append(node('p','customMessage','나 · '+m.instruction));
@@ -692,7 +722,7 @@ function renderCustom(state){
   for(const n of state.notes||[]){
     notes.append(node('p','noteMeta',formatTime(n.createdAt)+' · 원문 '+n.lastSequence+'번까지'),node('div','noteBody',n.text));
   }
-  if(!(state.notes||[]).length)notes.append(node('p','noteMeta','맞춤 정리 결과가 여기에 표시됩니다.'));
+  if(!(state.notes||[]).length)notes.append(node('p','noteMeta',state.current?'저장된 지침으로 정리하면 결과가 여기에 표시됩니다.':'아직 지침이 없습니다. 위에 정리 기준을 입력하고 지침 보내기를 누르세요. 지침을 보내기 전에는 지침요약을 생성하지 않습니다.'));
   chat.scrollTop=chat.scrollHeight;
 }
 async function loadCustom(){
@@ -711,20 +741,28 @@ async function sendCustom(){
   try{const state=await callGS('saveCustomInstruction',id,text);if(epoch!==custom.epoch)return;
     renderCustom(state);$('customInput').value='';$('customStatus').textContent='지침 저장 완료 · 기존 원문부터 새 기준으로 정리합니다.';
   }catch(e){if(epoch===custom.epoch)$('customStatus').textContent='지침 저장 실패: '+(e.message||e);}
-  finally{custom.busy=false;$('customSend').disabled=false;}
+  finally{custom.busy=false;updateCustomControls();}
   if(epoch===custom.epoch)runCustom();
 }
 async function runCustom(){
   if(!app.selected||custom.busy||!custom.state||!custom.state.current)return;
   const id=app.selected.id,epoch=custom.epoch;custom.busy=true;$('customRun').disabled=true;$('customSend').disabled=true;
-  $('customStatus').textContent='맞춤 정리 중...';
+  $('customStatus').textContent='지침요약 중...';
   try{await flushQueue();const res=await callGS('summarizeCustomRecording',id);if(epoch!==custom.epoch)return;
     if(res.state)renderCustom(res.state);
-    $('customStatus').textContent=res.status==='updated'?(res.remainingCount?'정리 완료 · 남은 '+res.remainingCount+'문장은 다음 정리에서 반영합니다.':'맞춤 정리 완료'):res.status==='nochange'?'새로 정리할 원문이 없습니다.':res.status==='cooldown'?'호출 간격 제한 · 다음 자동 정리에서 이어갑니다.':res.status==='stale'?'지침이 변경되어 이전 요청 결과를 제외했습니다.':'다른 맞춤 정리가 진행 중입니다.';
-  }catch(e){if(epoch===custom.epoch)$('customStatus').textContent='맞춤 정리 실패: '+(e.message||e);}
-  finally{custom.busy=false;$('customRun').disabled=false;$('customSend').disabled=false;}
+    $('customStatus').textContent=res.status==='updated'?(res.remainingCount?'정리 완료 · 남은 '+res.remainingCount+'문장은 다음 정리에서 반영합니다.':'지침요약 완료'):res.status==='nochange'?'새로 정리할 원문이 없습니다.':res.status==='cooldown'?'호출 간격 제한 · 다음 자동 정리에서 이어갑니다.':res.status==='stale'?'지침이 변경되어 이전 요청 결과를 제외했습니다.':'다른 맞춤 정리가 진행 중입니다.';
+  }catch(e){if(epoch===custom.epoch)$('customStatus').textContent='지침요약 실패: '+(e.message||e);}
+  finally{custom.busy=false;updateCustomControls();}
 }
 function setupCustom(){
+  $('defaultSummaryTab').addEventListener('click',()=>selectSummaryTab('default'));
+  $('customSummaryTab').addEventListener('click',()=>selectSummaryTab('custom'));
+  for(const id of ['defaultSummaryTab','customSummaryTab'])$(id).addEventListener('keydown',e=>{
+    if(['ArrowLeft','ArrowRight','Home','End'].includes(e.key)){
+      e.preventDefault();selectSummaryTab(e.key==='Home'?'default':e.key==='End'?'custom':custom.tab==='default'?'custom':'default',true);
+    }
+  });
+  selectSummaryTab('default');
   $('customSend').addEventListener('click',sendCustom);
   $('customRun').addEventListener('click',runCustom);
   $('customInput').addEventListener('keydown',e=>{if(e.key==='Enter'&&!e.shiftKey&&!e.isComposing){e.preventDefault();sendCustom();}});
@@ -735,4 +773,5 @@ if(isRecorder)setupRecorder();else setupDashboard();
 </script>
 </body>
 </html>
+
 
