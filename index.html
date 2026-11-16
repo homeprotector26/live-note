@@ -70,6 +70,7 @@
         <button class="summaryTab" id="customSummaryTab" type="button" role="tab" aria-selected="false" aria-controls="customSummaryPanel" tabindex="-1">지침요약</button>
       </div>
       <nav class="bookmarkNav" id="bookmarkNav" aria-label="강의 내용 책갈피"><span class="bookmarkLabel">▣ 책갈피</span><span class="noteMeta">AI 정리 후 나타납니다</span></nav>
+      <nav class="bookmarkNav" id="customBookmarkNav" aria-label="지침요약 책갈피" hidden><span class="bookmarkLabel">▣ 책갈피</span></nav>
       <div class="panelbody" id="summaryBody" role="tabpanel" aria-labelledby="defaultSummaryTab"><div class="empty"><div><span class="emptyicon">✦</span><b>기록이 쌓이면 정리를 시작해요</b><p>녹음 중 약 60초마다 새로운 내용을 기존 요약과 합쳐 갱신합니다.</p></div></div></div>
       <div class="panelbody" id="customSummaryPanel" role="tabpanel" aria-labelledby="customSummaryTab" hidden>
         <details class="customArea" id="customInstructions" open><summary>정리 지침 입력·변경</summary>
@@ -77,7 +78,7 @@
           <label for="customInput">원하는 정리 기준</label>
           <textarea id="customInput" maxlength="2500" placeholder="예: 반대측 주장과 근거만 정리해 줘. 입장이 불명확한 발언은 따로 표시해 줘."></textarea>
           <div class="customTools">
-            <button type="button" class="toolbtn mini" data-custom-example="토론에서 반대측 주장과 근거만 원문 번호와 함께 정리해 줘. 입장이 불명확하면 추측하지 마.">토론 · 반대측 주장</button>
+            <button type="button" class="toolbtn mini" data-custom-example="토론에서 반대측 주장과 근거만 정리해 줘. 입장이 불명확하면 추측하지 마.">토론 · 반대측 주장</button>
             <button type="button" class="toolbtn mini" data-custom-example="교수님 발언 요약, 강의에서 흥미로운 부분, 질문할 만한 부분을 각각 나눠 정리해 줘. 질문은 AI 제안임을 표시해 줘.">강의 · 요약과 질문</button>
             <button type="button" class="toolbtn primary" id="customSend">지침 보내기</button>
 
@@ -549,7 +550,7 @@ function setupDashboard(){setupCustom();window.addEventListener('message',onReco
   $('stopBtn').addEventListener('click',stopRecording);
   $('addManualBtn').addEventListener('click',()=>{if(!app.selected)return toast('먼저 새 기록을 만드세요.');const value=clean($('manualText').value);if(!value)return toast('추가할 문장을 입력하세요.');acceptFinal(value);$('manualText').value='';flushQueue().catch(err=>toast(err.message||'저장에 실패했습니다.'));});
   $('summarizeBtn').addEventListener('click',()=>summarize(true));
-  $('copySummary').addEventListener('click',async()=>{const copyText=custom.tab==='custom'?(custom.state&&custom.state.notes||[]).map(n=>n.text).join('\n\n'):app.summaryText;if(!copyText)return toast('복사할 요약이 없습니다.');try{await navigator.clipboard.writeText(copyText);toast('AI 정리를 복사했습니다.');}catch(_){toast('복사가 차단되었습니다. 요약을 직접 선택해 복사해 주세요.');}});
+  $('copySummary').addEventListener('click',async()=>{const copyText=custom.tab==='custom'?customSections(custom.state).map(s=>s.title+'\n'+s.body).join('\n\n'):app.summaryText;if(!copyText)return toast('복사할 요약이 없습니다.');try{await navigator.clipboard.writeText(copyText);toast('AI 정리를 복사했습니다.');}catch(_){toast('복사가 차단되었습니다. 요약을 직접 선택해 복사해 주세요.');}});
   app.summaryTimer=setInterval(()=>{if(!app.closing&&document.visibilityState==='visible'&&$('autoSummary').checked&&app.selected&&app.queue.length===0){
     if(app.selected.totalSegments>app.lastSummarizedSequence) summarize(false);
     runCustom();
@@ -698,7 +699,7 @@ const custom={state:null,busy:false,epoch:0,tab:'default'};
 function selectSummaryTab(tab,focus=false){
   custom.tab=tab;
   const isCustom=tab==='custom';
-  $('summaryBody').hidden=isCustom;$('bookmarkNav').hidden=isCustom;
+  $('summaryBody').hidden=isCustom;$('bookmarkNav').hidden=isCustom;$('customBookmarkNav').hidden=!isCustom;
   $('customSummaryPanel').hidden=!isCustom;$('summarizeBtn').hidden=isCustom;$('customRun').hidden=!isCustom;
   $('summaryVersion').hidden=isCustom;$('aiHelp').hidden=isCustom;
   for(const [id,selected] of [['defaultSummaryTab',!isCustom],['customSummaryTab',isCustom]]){
@@ -711,6 +712,29 @@ function updateCustomControls(){
   $('customSend').disabled=custom.busy||!app.selected;
 }
 
+function customSections(state){
+  const notes=state&&state.notes||[],structured=notes.filter(n=>Array.isArray(n.sections)),merged=[];
+  function add(s){
+    if(!s||typeof s.title!=='string'||typeof s.body!=='string'||!s.title.trim()||!s.body.trim())return;
+    const title=s.title.trim(),body=s.body.trim(),found=merged.find(x=>x.title===title);
+    if(!found)merged.push({title,body});else if(!found.body.includes(body))found.body+='\n\n'+body;
+  }
+  if(structured.length){structured.forEach(n=>n.sections.forEach(add));return merged;}
+  // Existing plain-text notes remain readable; remove the old model's procedural commentary.
+  for(const n of notes){
+    let title='지침요약',body=[];
+    function flush(){if(body.join('\n').trim())add({title,body:body.join('\n').trim()});body=[];}
+    for(const raw of String(n.text||'').split('\n')){
+      const line=raw.trim();
+      if(/^(?:[-*]\s*)?(?:※|화자는|반대측이 제시한 근거는|찬성측 발언|정리 (?:근거|대상|기준)|제외(?:한|된| 대상)|원문 (?:번호|출처))/.test(line))continue;
+      if(/^#{1,6}\s+/.test(line)){flush();title=line.replace(/^#{1,6}\s+/,'').replace(/\*\*/g,'');continue;}
+      body.push(line.replace(/\[\d+\]/g,'').replace(/\*\*/g,'').trim());
+    }
+    flush();
+  }
+  return merged;
+}
+
 function renderCustom(state){
   custom.state=state;updateCustomControls();$('customInstructions').open=!state.current;
   const chat=$('customChat'),notes=$('customNotes');chat.replaceChildren();notes.replaceChildren();
@@ -719,10 +743,21 @@ function renderCustom(state){
   }
   if(!state.current){chat.append(node('p','noteMeta','원하는 정리 기준을 채팅으로 보내세요.'));}
   else chat.append(node('p','noteMeta','AI · 지침 '+state.current.revision+' 적용. 앞선 지침을 함께 참고하며, 변경한 조건을 우선합니다. 기존 원문부터 순서대로 정리합니다.'));
-  for(const n of state.notes||[]){
-    notes.append(node('p','noteMeta',formatTime(n.createdAt)+' · 원문 '+n.lastSequence+'번까지'),node('div','noteBody',n.text));
+  const nav=$('customBookmarkNav');nav.replaceChildren(node('span','bookmarkLabel','▣ 책갈피'));
+  const sections=customSections(state);
+  sections.forEach((s,i)=>{
+    const id='custom-note-section-'+i;
+    const b=node('button','bookmark',s.title);b.type='button';
+    b.addEventListener('click',()=>document.getElementById(id).scrollIntoView({behavior:'smooth',block:'start'}));nav.append(b);
+    const section=node('section','noteSection');section.id=id;
+    const h=node('h3');h.append(node('span','idx',String(i+1).padStart(2,'0')),node('span','',s.title));
+    section.append(h,node('div','noteBody',s.body));notes.append(section);
+  });
+  if(!sections.length){
+    nav.append(node('span','noteMeta',state.current?'정리 후 키워드가 표시됩니다':'지침 입력 후 나타납니다'));
+    const empty=node('div','empty');empty.append(node('p','',state.current?'지침에 해당하는 정리 내용이 아직 없습니다.':'아직 지침이 없습니다. 위에 원하는 정리 기준을 입력해 주세요.'));
+    notes.append(empty);
   }
-  if(!(state.notes||[]).length)notes.append(node('p','noteMeta',state.current?'저장된 지침으로 정리하면 결과가 여기에 표시됩니다.':'아직 지침이 없습니다. 위에 정리 기준을 입력하고 지침 보내기를 누르세요. 지침을 보내기 전에는 지침요약을 생성하지 않습니다.'));
   chat.scrollTop=chat.scrollHeight;
 }
 async function loadCustom(){
