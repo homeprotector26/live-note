@@ -29,6 +29,16 @@
     .noteSection:target,.noteSection.flash{outline:3px solid #ffe056;transition:outline .35s}.noteSection h3{margin:0 0 11px;font-size:16px;line-height:1.5;display:flex;align-items:center;gap:9px}.noteSection .idx{border-radius:8px;background:#fff0aa;padding:2px 8px;font-size:12px;color:#625005}
     .noteBody{line-height:1.85;white-space:pre-wrap;overflow-wrap:anywhere;font-size:14px;color:#3c4147}.noticeSection{background:#fff8db;border-color:#f1df9c}.noticeSection h3{font-size:18px}.noticeEntry{border-top:1px solid #e7d89d;padding:14px 0}.noticeEntry:first-of-type{border-top:0}.badge{display:inline-block;background:#fee500;border-radius:8px;padding:3px 7px;font-size:11px;font-weight:800;margin-right:7px}.noticeEntry strong{font-size:14px}.noticeEntry p{white-space:pre-wrap;line-height:1.8;font-size:13px;margin:7px 0}.noteMeta{font-size:11px;color:#767776;line-height:1.6}.correctionSection{background:#f3fbf8;border-color:#cbe9df}.correction{border-top:1px solid #cde5dd;padding:10px 0;font-size:13px;line-height:1.8}.correction:first-of-type{border-top:0}.correction em{font-style:normal;color:#b64744}.correction strong{color:#087a64}
     .contextHint{font-size:11px;color:#9b7f0e;padding:4px 12px;background:#fff7d4;border-radius:30px;white-space:nowrap;max-width:35vw;text-overflow:ellipsis;overflow:hidden}.modal textarea{width:100%;min-height:70px;max-height:180px;border:1px solid #e4e5e9;border-radius:12px;padding:11px 13px;resize:vertical}.modal.large{width:min(560px,100%);max-height:92dvh;overflow-y:auto}.requiredMark{color:#c84343}.modal .fieldHelp{font-size:11px;color:#777;margin:5px 0 1px}.sectionSeparator{font-size:11px;font-weight:850;letter-spacing:.7px;color:#777;margin:15px 0 10px}
+  
+    .customArea{border-top:1px solid var(--line);padding-top:12px;margin-top:12px}
+    .customArea summary{cursor:pointer;font-weight:750;min-height:44px;padding:10px 0}
+    .customArea textarea{width:100%;min-height:72px;border:1px solid #d8dbe0;border-radius:10px;padding:12px;resize:vertical}
+    .customChat,.customNotes{max-height:210px;overflow:auto;overflow-wrap:anywhere}
+    .customMessage{background:#fff8d7;padding:10px 12px;border-radius:10px;white-space:pre-wrap;font-size:14px}
+    .customArea label{display:block;font-size:13px;margin:12px 0 7px}
+    .customTools{display:flex;flex-wrap:wrap;gap:8px;margin:8px 0}.customTools button{min-height:44px}
+    .customNotes .noteBody{margin-bottom:16px}.customArea :focus-visible{outline:2px solid #a38b00;outline-offset:2px}
+    @media(prefers-reduced-motion:reduce){*{scroll-behavior:auto!important;animation:none!important}}
   </style>
 </head>
 <body>
@@ -57,6 +67,20 @@
         <div id="panelAlert" class="warning" hidden></div>
         <div class="aiactions"><button class="toolbtn primary" id="summarizeBtn" type="button" disabled>✦ 지금 AI 정리</button><label class="checkline"><input type="checkbox" id="autoSummary" checked>60초마다 자동 정리</label><button class="toolbtn mini" id="copySummary" type="button">요약 복사</button></div>
         <small id="aiHelp">새 원문을 약 60초마다 누적 정리합니다. 책갈피를 누르면 해당 내용으로 이동합니다. AI 교정은 제안이며 원문을 변경하지 않습니다.</small>
+        <details class="customArea" open><summary>맞춤 AI 정리 · 채팅으로 지침 보내기</summary>
+          <div id="customChat" class="customChat" role="log" aria-label="정리 지침 대화"></div>
+          <label for="customInput">원하는 정리 기준</label>
+          <textarea id="customInput" maxlength="2500" placeholder="예: 반대측 주장과 근거만 정리해 줘. 입장이 불명확한 발언은 따로 표시해 줘."></textarea>
+          <div class="customTools">
+            <button type="button" class="toolbtn mini" data-custom-example="토론에서 반대측 주장과 근거만 원문 번호와 함께 정리해 줘. 입장이 불명확하면 추측하지 마.">토론 · 반대측 주장</button>
+            <button type="button" class="toolbtn mini" data-custom-example="교수님 발언 요약, 강의에서 흥미로운 부분, 질문할 만한 부분을 각각 나눠 정리해 줘. 질문은 AI 제안임을 표시해 줘.">강의 · 요약과 질문</button>
+            <button type="button" class="toolbtn primary" id="customSend">지침 보내기</button>
+            <button type="button" class="toolbtn" id="customRun">지금 맞춤 정리</button>
+          </div>
+          <p id="customStatus" class="noteMeta" role="status">지침을 입력하면 맞춤 정리를 시작합니다.</p>
+          <small>Enter로 전송 · Shift+Enter로 줄바꿈. 기본 AI 정리는 계속 유지됩니다. 지침을 바꾸면 기존 원문부터 다시 정리합니다. 자동 정리는 위 체크박스를 따릅니다.</small>
+          <div id="customNotes" class="customNotes" aria-label="맞춤 AI 정리 결과"></div>
+        </details>
       </div>
     </section>
   </main>
@@ -317,7 +341,7 @@ function usePayload(payload){app.sessions=payload.sessions||[];app.selected=payl
   app.savedIds.clear();restoreQueue();
   $('startBtn').disabled=!app.selected;$('summarizeBtn').disabled=!app.selected;
   setRecordStatus(app.selected?'녹음 대기 · 준비됨':'새 기록을 만들어 주세요');
-  displaySave('Google Sheets 자동 저장');setAlert('');}
+  displaySave('Google Sheets 자동 저장');setAlert('');loadCustom();}
 async function bootstrap(){try{
     const data=await callGS('getBootstrap');app.recorderUrl=data.recorderUrl||'';usePayload(data);
     if(!app.selected){$('newSessionModal').hidden=false;$('newTitle').value='새로운 수업 기록';}
@@ -496,7 +520,7 @@ function shutdownDashboard(){
   window.removeEventListener('message',onRecorderMessage);
 }
 
-function setupDashboard(){window.addEventListener('message',onRecorderMessage);
+function setupDashboard(){setupCustom();window.addEventListener('message',onRecorderMessage);
   $('sessionSelect').addEventListener('change',e=>switchSession(e.target.value));
   $('newSessionBtn').addEventListener('click',()=>{if(!ensureCanSwitch())return;$('newTitle').value='';$('newSessionModal').hidden=false;$('newTitle').focus();});
   $('cancelNew').addEventListener('click',()=>{$('newSessionModal').hidden=true;});
@@ -515,6 +539,7 @@ function setupDashboard(){window.addEventListener('message',onRecorderMessage);
   $('copySummary').addEventListener('click',async()=>{if(!app.summaryText)return toast('복사할 요약이 없습니다.');try{await navigator.clipboard.writeText(app.summaryText);toast('AI 정리를 복사했습니다.');}catch(_){toast('복사가 차단되었습니다. 요약을 직접 선택해 복사해 주세요.');}});
   app.summaryTimer=setInterval(()=>{if(!app.closing&&document.visibilityState==='visible'&&$('autoSummary').checked&&app.selected&&app.queue.length===0){
     if(app.selected.totalSegments>app.lastSummarizedSequence) summarize(false);
+    runCustom();
   }},60000);
   window.addEventListener('beforeunload',e=>{if(app.queue.length){e.preventDefault();e.returnValue='';}});
   window.addEventListener('pagehide',shutdownDashboard);
@@ -536,6 +561,7 @@ function setupRecorder(){
   }
   let paired=false,confirmed=0,stopping=false,closed=false,hasStopped=true;
   let lastParentSeen=Date.now(),lastResend=0;
+  let terminalMessage='',connectionLost=false;
   const pending=new Map();
   let interval=null;
   function send(type,values={}){
@@ -561,7 +587,7 @@ function setupRecorder(){
   }
   function safeClose(){
     send('recorder-closed');cleanup();
-    try{window.close();}catch(_){}
+    // Keep the window open so status and unsaved text remain reviewable.
     $('recStatus').textContent='마이크와 연결이 종료되었습니다. 이 창을 닫아도 됩니다.';
     $('recStart').disabled=true;$('recStop').disabled=true;
   }
@@ -573,7 +599,7 @@ function setupRecorder(){
     const m=event.data;if(!m||typeof m!=='object'||m.nonce!==nonce)return;
     lastParentSeen=Date.now();
     if(m.type==='recorder-hello'){
-      paired=true;$('recStatus').textContent='● 메인 화면과 연결됨 · 마이크 시작을 누르세요';flushOutbound();
+      paired=true;connectionLost=false;terminalMessage='';$('recStart').disabled=stopping||speech.want||Boolean(speech.instance);$('recStatus').textContent='● 메인 화면과 연결됨 · 마이크 시작을 누르세요';flushOutbound();
     }else if(m.type==='recorder-ack'&&typeof m.eventId==='string'&&pending.has(m.eventId)){
       pending.delete(m.eventId);confirmed++;updateCount();maybeFinish();
     }else if(m.type==='recorder-stop'){
@@ -595,7 +621,7 @@ function setupRecorder(){
     }
   }
   const speech=new LiveSpeech(text=>{
-    if(closed||stopping)return;
+    if(closed)return;
     const eventId=token();pending.set(eventId,text);
     $('recPreview').textContent=text;updateCount();
     if(pending.size>=200){
@@ -614,19 +640,19 @@ function setupRecorder(){
     if(idle)hasStopped=true;
     $('recStart').disabled=!paired||stopping||!idle;
     $('recStop').disabled=idle;
-    $('recStatus').textContent=active?'● 마이크 녹음 중':state==='recovering'?'음성 인식 재연결 중':'■ 녹음 중지됨';
+    $('recStatus').textContent=terminalMessage||(active?'● 마이크 녹음 중':state==='recovering'?'음성 인식 재연결 중':'■ 녹음 중지됨');
     if(active)send('recorder-started');
     if(idle){send('recorder-stopped');maybeFinish();}
   },(error,fatal)=>{
     if(closed)return;
-    $('recStatus').textContent=error;
+    terminalMessage=error;$('recStatus').textContent=error;
     send('recorder-error',{message:error,fatal});
-    if(fatal){stopping=true;hasStopped=true;maybeFinish();}
+    if(fatal){stopping=false;}
   });
   window.addEventListener('message',onMessage);
   $('recStart').addEventListener('click',()=>{
     if(!paired||stopping||closed)return toast('메인 화면 연결을 확인해 주세요.');
-    if(speech.start()){$('recStart').disabled=true;$('recStatus').textContent='마이크 연결 중...';}
+    terminalMessage='';if(speech.start()){$('recStart').disabled=true;$('recStatus').textContent='마이크 연결 중...';}
   });
   $('recStop').addEventListener('click',()=>{
     if(!closed){speech.stop();}
@@ -634,16 +660,15 @@ function setupRecorder(){
   updateCount();
   interval=setInterval(()=>{
     if(closed)return;
-    if(!window.opener||window.opener.closed|| (paired&&Date.now()-lastParentSeen>13000)){
-      $('recStatus').textContent='메인 화면 연결이 끊어져 마이크를 자동 종료했습니다.';
-      if(pending.size){
-        speech.stop();stopping=true;
-        $('recStatus').textContent='메인 화면과 연결이 끊겼습니다. 아래 미저장 문장을 복사해 보관하세요.';
-        $('recPreview').textContent=[...pending.values()].join('\n');
-        $('recStart').disabled=true;$('recStop').disabled=true;
-        clearInterval(interval);return;
+    if(!window.opener||window.opener.closed||(paired&&Date.now()-lastParentSeen>120000)){
+      if(!connectionLost){
+        connectionLost=true;paired=false;
+        terminalMessage='메인 화면 연결이 끊겨 마이크를 중지했습니다. 연결이 복구되면 마이크 시작을 눌러 주세요.';
+        speech.stop();$('recStatus').textContent=terminalMessage;
+        if(pending.size)$('recPreview').textContent=[...pending.values()].join('\n');
+        $('recStart').disabled=true;
       }
-      safeClose();return;
+      send('recorder-ready');return;
     }
     if(!paired)send('recorder-ready');
     else if(pending.size&&Date.now()-lastResend>5000)flushOutbound();
@@ -655,6 +680,57 @@ function setupRecorder(){
     if(pending.size){e.preventDefault();e.returnValue='';}
   });
 }
+const custom={state:null,busy:false,epoch:0};
+function renderCustom(state){
+  custom.state=state;
+  const chat=$('customChat'),notes=$('customNotes');chat.replaceChildren();notes.replaceChildren();
+  for(const m of state.messages||[]){
+    chat.append(node('p','customMessage','나 · '+m.instruction));
+  }
+  if(!state.current){chat.append(node('p','noteMeta','원하는 정리 기준을 채팅으로 보내세요.'));}
+  else chat.append(node('p','noteMeta','AI · 지침 '+state.current.revision+' 적용. 앞선 지침을 함께 참고하며, 변경한 조건을 우선합니다. 기존 원문부터 순서대로 정리합니다.'));
+  for(const n of state.notes||[]){
+    notes.append(node('p','noteMeta',formatTime(n.createdAt)+' · 원문 '+n.lastSequence+'번까지'),node('div','noteBody',n.text));
+  }
+  if(!(state.notes||[]).length)notes.append(node('p','noteMeta','맞춤 정리 결과가 여기에 표시됩니다.'));
+  chat.scrollTop=chat.scrollHeight;
+}
+async function loadCustom(){
+  const epoch=++custom.epoch,id=app.selected&&app.selected.id;
+  custom.state=null;renderCustom({messages:[],notes:[]});
+  if(!id)return;
+  $('customStatus').textContent='지침 불러오는 중...';
+  try{const state=await callGS('getCustomNoteState',id);if(epoch!==custom.epoch)return;renderCustom(state);$('customStatus').textContent=state.current?'저장된 지침 적용 중':'지침을 입력하면 맞춤 정리를 시작합니다.';}
+  catch(e){if(epoch===custom.epoch)$('customStatus').textContent='불러오기 실패: '+(e.message||e);}
+}
+async function sendCustom(){
+  if(!app.selected||custom.busy)return;
+  const text=clean($('customInput').value);if(!text)return;
+  const id=app.selected.id,epoch=custom.epoch;custom.busy=true;$('customSend').disabled=true;
+  $('customStatus').textContent='지침 저장 중...';
+  try{const state=await callGS('saveCustomInstruction',id,text);if(epoch!==custom.epoch)return;
+    renderCustom(state);$('customInput').value='';$('customStatus').textContent='지침 저장 완료 · 기존 원문부터 새 기준으로 정리합니다.';
+  }catch(e){if(epoch===custom.epoch)$('customStatus').textContent='지침 저장 실패: '+(e.message||e);}
+  finally{custom.busy=false;$('customSend').disabled=false;}
+  if(epoch===custom.epoch)runCustom();
+}
+async function runCustom(){
+  if(!app.selected||custom.busy||!custom.state||!custom.state.current)return;
+  const id=app.selected.id,epoch=custom.epoch;custom.busy=true;$('customRun').disabled=true;$('customSend').disabled=true;
+  $('customStatus').textContent='맞춤 정리 중...';
+  try{await flushQueue();const res=await callGS('summarizeCustomRecording',id);if(epoch!==custom.epoch)return;
+    if(res.state)renderCustom(res.state);
+    $('customStatus').textContent=res.status==='updated'?(res.remainingCount?'정리 완료 · 남은 '+res.remainingCount+'문장은 다음 정리에서 반영합니다.':'맞춤 정리 완료'):res.status==='nochange'?'새로 정리할 원문이 없습니다.':res.status==='cooldown'?'호출 간격 제한 · 다음 자동 정리에서 이어갑니다.':res.status==='stale'?'지침이 변경되어 이전 요청 결과를 제외했습니다.':'다른 맞춤 정리가 진행 중입니다.';
+  }catch(e){if(epoch===custom.epoch)$('customStatus').textContent='맞춤 정리 실패: '+(e.message||e);}
+  finally{custom.busy=false;$('customRun').disabled=false;$('customSend').disabled=false;}
+}
+function setupCustom(){
+  $('customSend').addEventListener('click',sendCustom);
+  $('customRun').addEventListener('click',runCustom);
+  $('customInput').addEventListener('keydown',e=>{if(e.key==='Enter'&&!e.shiftKey&&!e.isComposing){e.preventDefault();sendCustom();}});
+  document.querySelectorAll('[data-custom-example]').forEach(b=>b.addEventListener('click',()=>{$('customInput').value=b.dataset.customExample;$('customInput').focus();}));
+}
+
 if(isRecorder)setupRecorder();else setupDashboard();
 </script>
 </body>
