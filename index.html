@@ -933,7 +933,7 @@ async function readDebateFile(){
     if(/\.pdf$/i.test(file.name)){
       const pdfjs=await import('https://cdn.jsdelivr.net/npm/pdfjs-dist@6.5.438/build/pdf.min.mjs');
       pdfjs.GlobalWorkerOptions.workerSrc='https://cdn.jsdelivr.net/npm/pdfjs-dist@6.5.438/build/pdf.worker.min.mjs';
-      const task=pdfjs.getDocument({data:new Uint8Array(await file.arrayBuffer()),isEvalSupported:false,enableXfa:false,cMapUrl:'https://cdn.jsdelivr.net/npm/pdfjs-dist@6.5.438/cmaps/',cMapPacked:true});
+      const task=pdfjs.getDocument({data:new Uint8Array(await file.arrayBuffer()),isEvalSupported:false,enableXfa:false,cMapUrl:'https://cdn.jsdelivr.net/npm/pdfjs-dist@6.5.438/cmaps/',cMapPacked:true,standardFontDataUrl:'https://cdn.jsdelivr.net/npm/pdfjs-dist@6.5.438/standard_fonts/'});
       task.onPassword=()=>{task.destroy();};
       const pdf=await task.promise;let blank=0;
       try{
@@ -946,7 +946,7 @@ async function readDebateFile(){
           if(pageText.length<10)blank++;else text+='\n[PDF p.'+pageNo+']\n'+pageText+'\n';
           page.cleanup();if(text.length>40000)throw new Error('추출 텍스트가 4만 자를 넘습니다. PDF를 나누어 등록하세요.');
         }
-      }finally{await pdf.destroy();}
+      }finally{await task.destroy();}
       if(blank)text='[주의: '+blank+'개 페이지는 텍스트를 추출하지 못했습니다.]\n'+text;
       if(!text.replace(/\[.*?\]/g,'').trim())throw new Error('추출할 텍스트가 없습니다. 스캔 PDF는 OCR로 변환한 텍스트를 넣어 주세요.');
     }else if(/\.txt$/i.test(file.name)){text=await file.text();if(/[\x00-\x08\x0b\x0c\x0e-\x1f\ufffd]/.test(text))throw new Error('UTF-8 일반 텍스트 파일을 선택하세요.');}
@@ -983,5 +983,6 @@ if(isRecorder)setupRecorder();else setupDashboard();
 </script>
 </body>
 </html>
+
 
 
