@@ -42,6 +42,17 @@
     .summaryTab{min-height:44px;border:1px solid #e7d77b;border-bottom:0;border-radius:10px 10px 0 0;padding:10px 18px;background:#fffdf3;color:#625005;font-weight:750}
     .summaryTab[aria-selected="true"]{background:var(--yellow);color:var(--ink);border-color:#e1c900}
     .summaryTab:focus-visible{outline:2px solid #887300;outline-offset:2px}
+    .debateForm{border-bottom:1px solid var(--line);padding-bottom:16px;margin-bottom:18px}
+    .debateForm summary{cursor:pointer;font-weight:750;min-height:44px;padding:10px 0}
+    .debateForm label{display:block;font-size:13px;margin:12px 0 6px}
+    .debateForm input:not([type=checkbox]),.debateForm textarea{width:100%;max-width:100%}
+    .debateForm textarea{min-height:150px;resize:vertical;border:1px solid #e4e5e9;border-radius:12px;padding:12px}
+    .debateForm button{min-height:44px}.debateEntry{border-top:1px solid var(--line);padding:15px 0}
+    .debateEntry:first-of-type{border-top:0}.debateStatement{font-weight:700;line-height:1.7;white-space:pre-wrap;overflow-wrap:anywhere}
+    .debateEntry h4{margin:14px 0 7px;font-size:13px;color:#71673d}.evidenceStatus{font-size:12px;color:#08745e}.evidenceStatus.uncertain{color:#886e12}
+    .evidenceDetails summary{cursor:pointer;min-height:44px;font-size:13px;padding:12px 0}.evidenceItem{padding:10px 0;border-top:1px solid var(--line);overflow-wrap:anywhere}
+    .evidenceItem a{color:#235b8b}.evidenceItem blockquote{margin:8px 0;padding:10px 13px;background:var(--soft);font-size:13px;line-height:1.7;white-space:pre-wrap}
+    .summaryTabs{overflow-x:auto}.summaryTab{white-space:nowrap}
     @media(prefers-reduced-motion:reduce){*{scroll-behavior:auto!important;animation:none!important}}
   </style>
 </head>
@@ -68,9 +79,11 @@
       <div class="summaryTabs" role="tablist" aria-label="요약본 선택">
         <button class="summaryTab" id="defaultSummaryTab" type="button" role="tab" aria-selected="true" aria-controls="summaryBody">기본요약</button>
         <button class="summaryTab" id="customSummaryTab" type="button" role="tab" aria-selected="false" aria-controls="customSummaryPanel" tabindex="-1">지침요약</button>
+        <button class="summaryTab" id="debateSummaryTab" type="button" role="tab" aria-selected="false" aria-controls="debatePanel" tabindex="-1">토론 모드</button>
       </div>
       <nav class="bookmarkNav" id="bookmarkNav" aria-label="강의 내용 책갈피"><span class="bookmarkLabel">▣ 책갈피</span><span class="noteMeta">AI 정리 후 나타납니다</span></nav>
       <nav class="bookmarkNav" id="customBookmarkNav" aria-label="지침요약 책갈피" hidden><span class="bookmarkLabel">▣ 책갈피</span></nav>
+      <nav class="bookmarkNav" id="debateBookmarkNav" aria-label="토론 책갈피" hidden><span class="bookmarkLabel">▣ 토론</span></nav>
       <div class="panelbody" id="summaryBody" role="tabpanel" aria-labelledby="defaultSummaryTab"><div class="empty"><div><span class="emptyicon">✦</span><b>기록이 쌓이면 정리를 시작해요</b><p>녹음 중 약 60초마다 새로운 내용을 기존 요약과 합쳐 갱신합니다.</p></div></div></div>
       <div class="panelbody" id="customSummaryPanel" role="tabpanel" aria-labelledby="customSummaryTab" hidden>
         <details class="customArea" id="customInstructions" open><summary>정리 지침 입력·변경</summary>
@@ -90,9 +103,32 @@
         <p id="customStatus" class="noteMeta" role="status">지침을 입력하면 지침요약을 시작합니다.</p>
         <div id="customNotes" class="customNotes" aria-label="지침요약 결과"></div>
       </div>
+      <div class="panelbody" id="debatePanel" role="tabpanel" aria-labelledby="debateSummaryTab" hidden>
+        <details class="debateForm" id="debateSettings" open><summary>토론 주제·입장 설정</summary>
+          <label for="debateTopic">토론 주제</label><input id="debateTopic" maxlength="400" placeholder="예: 대학 도서관 야간 운영을 확대해야 하는가">
+          <label for="debateOurs">우리 측 입장·호칭</label><input id="debateOurs" maxlength="400" placeholder="예: 찬성측 · 학습 공간 확대를 주장">
+          <label for="debateTheirs">상대 측 입장·호칭</label><input id="debateTheirs" maxlength="400" placeholder="예: 반대측 · 추가 비용을 이유로 반대">
+          <label class="checkline"><input type="checkbox" id="debateExternal" checked>제공자료가 부족하면 외부 학술 초록 검색</label>
+          <p class="noteMeta">제공자료의 관련 구간을 먼저 찾습니다. 외부 검색은 Crossref 학술 초록으로 제한되며, 근거를 못 찾으면 부족하다고 표시합니다.</p>
+          <button type="button" class="toolbtn primary" id="debateSave">토론 설정 저장</button>
+        </details>
+        <details class="debateForm" id="debateMaterials"><summary>제공자료 등록 · PDF / TXT / 텍스트</summary>
+          <div id="debateMaterialList"></div>
+          <label for="debateFile">파일에서 본문 가져오기</label><input type="file" id="debateFile" accept=".pdf,.txt,application/pdf,text/plain">
+          <p class="noteMeta">10MB·200페이지 이하의 텍스트 PDF 또는 UTF-8 TXT. 스캔 PDF는 OCR 텍스트가 필요합니다. 추출 본문을 확인한 후 등록하세요.</p>
+          <label for="debateMaterialTitle">자료 제목</label><input id="debateMaterialTitle" maxlength="160" placeholder="예: 도서관 운영 보고서 2026">
+          <label for="debateMaterialUrl">출처 주소 (선택)</label><input id="debateMaterialUrl" type="url" maxlength="1200" placeholder="https://...">
+          <label for="debateMaterialText">자료 본문</label><textarea id="debateMaterialText" maxlength="40000" placeholder="근거로 사용할 본문을 넣으세요. 자료당 4만 자, 기록당 10개·전체 16만 자까지 등록할 수 있습니다."></textarea>
+          <button type="button" class="toolbtn primary" id="debateMaterialAdd">자료 등록</button>
+          <p class="noteMeta">자료는 등록할 때 색인을 만듭니다. 이후 관련 구간만 분석하며, 설정이나 자료를 바꾸면 이전 결과를 보존하고 새 기준으로 분석합니다.</p>
+        </details>
+        <p id="debateStatus" class="noteMeta" role="status">토론 주제와 양측 입장을 입력하세요.</p>
+        <p class="noteMeta">발언자 자동 구분은 지원하지 않습니다. 입장이 불명확한 발언은 ‘입장 확인 필요’로 분리합니다. 반박·답변은 AI 제안이며, 출처를 확인하고 사용하세요.</p>
+        <div id="debateNotes"></div>
+      </div>
       <div class="panelbottom">
         <div id="panelAlert" class="warning" hidden></div>
-        <div class="aiactions"><button class="toolbtn primary" id="summarizeBtn" type="button" disabled>✦ 지금 AI 정리</button><button type="button" class="toolbtn primary" id="customRun" hidden disabled>지금 지침요약</button><label class="checkline"><input type="checkbox" id="autoSummary" checked>60초마다 자동 정리</label><button class="toolbtn mini" id="copySummary" type="button">요약 복사</button></div>
+        <div class="aiactions"><button class="toolbtn primary" id="summarizeBtn" type="button" disabled>✦ 지금 AI 정리</button><button type="button" class="toolbtn primary" id="customRun" hidden disabled>지금 지침요약</button><button type="button" class="toolbtn primary" id="debateRun" hidden disabled>지금 토론 분석</button><label class="checkline" id="autoSummaryLabel"><input type="checkbox" id="autoSummary" checked>60초마다 자동 정리</label><label class="checkline" id="debateAutoLabel" hidden><input type="checkbox" id="debateAuto">60초마다 토론 분석</label><button class="toolbtn mini" id="copySummary" type="button">요약 복사</button></div>
         <small id="aiHelp">새 원문을 약 60초마다 누적 정리합니다. 책갈피를 누르면 해당 내용으로 이동합니다. AI 교정은 제안이며 원문을 변경하지 않습니다.</small>
 
       </div>
@@ -355,7 +391,7 @@ function usePayload(payload){app.sessions=payload.sessions||[];app.selected=payl
   app.savedIds.clear();restoreQueue();
   $('startBtn').disabled=!app.selected;$('summarizeBtn').disabled=!app.selected;
   setRecordStatus(app.selected?'녹음 대기 · 준비됨':'새 기록을 만들어 주세요');
-  displaySave('Google Sheets 자동 저장');setAlert('');loadCustom();}
+  displaySave('Google Sheets 자동 저장');setAlert('');loadCustom();resetDebate();}
 async function bootstrap(){try{
     const data=await callGS('getBootstrap');app.recorderUrl=data.recorderUrl||'';usePayload(data);
     if(!app.selected){$('newSessionModal').hidden=false;$('newTitle').value='새로운 수업 기록';}
@@ -534,7 +570,7 @@ function shutdownDashboard(){
   window.removeEventListener('message',onRecorderMessage);
 }
 
-function setupDashboard(){setupCustom();window.addEventListener('message',onRecorderMessage);
+function setupDashboard(){setupCustom();setupDebate();window.addEventListener('message',onRecorderMessage);
   $('sessionSelect').addEventListener('change',e=>switchSession(e.target.value));
   $('newSessionBtn').addEventListener('click',()=>{if(!ensureCanSwitch())return;$('newTitle').value='';$('newSessionModal').hidden=false;$('newTitle').focus();});
   $('cancelNew').addEventListener('click',()=>{$('newSessionModal').hidden=true;});
@@ -550,11 +586,13 @@ function setupDashboard(){setupCustom();window.addEventListener('message',onReco
   $('stopBtn').addEventListener('click',stopRecording);
   $('addManualBtn').addEventListener('click',()=>{if(!app.selected)return toast('먼저 새 기록을 만드세요.');const value=clean($('manualText').value);if(!value)return toast('추가할 문장을 입력하세요.');acceptFinal(value);$('manualText').value='';flushQueue().catch(err=>toast(err.message||'저장에 실패했습니다.'));});
   $('summarizeBtn').addEventListener('click',()=>summarize(true));
-  $('copySummary').addEventListener('click',async()=>{const copyText=custom.tab==='custom'?customSections(custom.state).map(s=>s.title+'\n'+s.body).join('\n\n'):app.summaryText;if(!copyText)return toast('복사할 요약이 없습니다.');try{await navigator.clipboard.writeText(copyText);toast('AI 정리를 복사했습니다.');}catch(_){toast('복사가 차단되었습니다. 요약을 직접 선택해 복사해 주세요.');}});
+  $('copySummary').addEventListener('click',async()=>{const copyText=custom.tab==='debate'?debateCopyText():custom.tab==='custom'?customSections(custom.state).map(s=>s.title+'\n'+s.body).join('\n\n'):app.summaryText;if(!copyText)return toast('복사할 요약이 없습니다.');try{await navigator.clipboard.writeText(copyText);toast('AI 정리를 복사했습니다.');}catch(_){toast('복사가 차단되었습니다. 요약을 직접 선택해 복사해 주세요.');}});
   app.summaryTimer=setInterval(()=>{if(!app.closing&&document.visibilityState==='visible'&&$('autoSummary').checked&&app.selected&&app.queue.length===0){
     if(app.selected.totalSegments>app.lastSummarizedSequence) summarize(false);
     runCustom();
-  }},60000);
+  }
+    if(!app.closing&&document.visibilityState==='visible'&&$('debateAuto').checked&&app.selected)runDebate(false);
+  },60000);
   window.addEventListener('beforeunload',e=>{if(app.queue.length){e.preventDefault();e.returnValue='';}});
   window.addEventListener('pagehide',shutdownDashboard);
   window.addEventListener('visibilitychange',()=>{if(document.visibilityState==='hidden'&&app.queue.length){persistQueue();flushQueue().catch(()=>{});}});
@@ -698,14 +736,18 @@ const custom={state:null,busy:false,epoch:0,tab:'default'};
 
 function selectSummaryTab(tab,focus=false){
   custom.tab=tab;
-  const isCustom=tab==='custom';
-  $('summaryBody').hidden=isCustom;$('bookmarkNav').hidden=isCustom;$('customBookmarkNav').hidden=!isCustom;
-  $('customSummaryPanel').hidden=!isCustom;$('summarizeBtn').hidden=isCustom;$('customRun').hidden=!isCustom;
-  $('summaryVersion').hidden=isCustom;$('aiHelp').hidden=isCustom;
-  for(const [id,selected] of [['defaultSummaryTab',!isCustom],['customSummaryTab',isCustom]]){
+  const isCustom=tab==='custom',isDebate=tab==='debate',isDefault=tab==='default';
+  $('summaryBody').hidden=!isDefault;$('bookmarkNav').hidden=!isDefault;
+  $('customBookmarkNav').hidden=!isCustom;$('customSummaryPanel').hidden=!isCustom;
+  $('debateBookmarkNav').hidden=!isDebate;$('debatePanel').hidden=!isDebate;
+  $('summarizeBtn').hidden=!isDefault;$('customRun').hidden=!isCustom;$('debateRun').hidden=!isDebate;
+  $('summaryVersion').hidden=!isDefault;$('aiHelp').hidden=!isDefault;
+  $('autoSummaryLabel').hidden=isDebate;$('debateAutoLabel').hidden=!isDebate;
+  for(const [id,selected] of [['defaultSummaryTab',isDefault],['customSummaryTab',isCustom],['debateSummaryTab',isDebate]]){
     $(id).setAttribute('aria-selected',String(selected));$(id).tabIndex=selected?0:-1;
     if(selected&&focus)$(id).focus();
   }
+  if(isDebate&&typeof loadDebate==='function')loadDebate();
 }
 function updateCustomControls(){
   $('customRun').disabled=custom.busy||!app.selected||!custom.state||!custom.state.current;
@@ -792,9 +834,9 @@ async function runCustom(){
 function setupCustom(){
   $('defaultSummaryTab').addEventListener('click',()=>selectSummaryTab('default'));
   $('customSummaryTab').addEventListener('click',()=>selectSummaryTab('custom'));
-  for(const id of ['defaultSummaryTab','customSummaryTab'])$(id).addEventListener('keydown',e=>{
+  for(const id of ['defaultSummaryTab','customSummaryTab','debateSummaryTab'])$(id).addEventListener('keydown',e=>{
     if(['ArrowLeft','ArrowRight','Home','End'].includes(e.key)){
-      e.preventDefault();selectSummaryTab(e.key==='Home'?'default':e.key==='End'?'custom':custom.tab==='default'?'custom':'default',true);
+      e.preventDefault();const tabs=['default','custom','debate'];selectSummaryTab(e.key==='Home'?'default':e.key==='End'?'debate':tabs[(tabs.indexOf(custom.tab)+(e.key==='ArrowRight'?1:2))%3],true);
     }
   });
   selectSummaryTab('default');
@@ -802,6 +844,139 @@ function setupCustom(){
   $('customRun').addEventListener('click',runCustom);
   $('customInput').addEventListener('keydown',e=>{if(e.key==='Enter'&&!e.shiftKey&&!e.isComposing){e.preventDefault();sendCustom();}});
   document.querySelectorAll('[data-custom-example]').forEach(b=>b.addEventListener('click',()=>{$('customInput').value=b.dataset.customExample;$('customInput').focus();}));
+}
+
+const debate={state:null,epoch:0,busy:false,loadedId:'',materialRequestId:'',fileBusy:false};
+function debateControls(){
+  const ready=Boolean(app.selected&&!debate.busy&&!debate.fileBusy);
+  $('debateSave').disabled=!ready;$('debateMaterialAdd').disabled=!ready;
+  $('debateRun').disabled=!ready||!debate.state||!debate.state.config;
+  $('debateFile').disabled=!ready;
+}
+function resetDebate(){
+  debate.epoch++;debate.state=null;debate.loadedId='';debate.materialRequestId='';
+  $('debateAuto').checked=false;$('debateMaterialTitle').value='';$('debateMaterialText').value='';$('debateMaterialUrl').value='';$('debateFile').value='';
+  renderDebate({config:null,materials:[],notes:[]},true);
+  if(custom.tab==='debate')loadDebate();
+}
+function debateItems(){return (debate.state&&debate.state.notes||[]).flatMap(n=>n.result.items||[]);}
+function debateCopyText(){return debateItems().map(x=>x.text+'\n'+x.reply+'\n'+x.citations.map(c=>c.title+' '+(c.url||'')+'\n'+c.quote).join('\n')).join('\n\n');}
+function renderDebate(state,refresh=false){
+  debate.state=state;debateControls();
+  if(refresh){const c=state.config||{};$('debateTopic').value=c.topic||'';$('debateOurs').value=c.ours||'';$('debateTheirs').value=c.theirs||'';$('debateExternal').checked=c.external!==false;}
+  $('debateSettings').open=!state.config;
+  const list=$('debateMaterialList');list.replaceChildren();
+  for(const m of state.materials||[])list.append(node('p','noteMeta',m.title+' · '+m.charCount.toLocaleString('ko-KR')+'자 · 제공자료'));
+  if(!(state.materials||[]).length)list.append(node('p','noteMeta','등록된 자료가 없습니다. 텍스트·TXT·텍스트 PDF를 등록하면 먼저 찾아봅니다.'));
+  const body=$('debateNotes'),nav=$('debateBookmarkNav');body.replaceChildren();nav.replaceChildren(node('span','bookmarkLabel','▣ 토론'));
+  const items=debateItems();
+  const groups=[['우리 측 주장',x=>x.side==='ours'&&x.kind==='claim'],['상대 측 주장과 반박',x=>x.side==='theirs'&&x.kind==='claim'],['상대 질문과 답변',x=>x.side==='theirs'&&x.kind==='question'],['우리 측 질문',x=>x.side==='ours'&&x.kind==='question'],['입장 확인 필요',x=>x.side==='unknown']];
+  let sectionIndex=0;
+  for(const [title,predicate] of groups){
+    const entries=items.filter(predicate);if(!entries.length)continue;
+    const section=node('section','noteSection'),id='debate-section-'+sectionIndex++;section.id=id;
+    section.append(node('h3','',title));const bookmark=node('button','bookmark',title);bookmark.type='button';bookmark.addEventListener('click',()=>section.scrollIntoView({behavior:'smooth',block:'start'}));nav.append(bookmark);
+    for(const x of entries){
+      const row=node('article','debateEntry');row.append(node('p','debateStatement',x.text),node('p','noteMeta','발언 요약 · 원문 '+x.sequence+'번'));
+      if(x.side!=='unknown'){
+        row.append(node('h4','',x.side==='theirs'?(x.kind==='question'?'답변 제안':'반박 제안'):'주장 보완 제안'),node('div','noteBody',x.reply));
+        const labels={provided:'제공자료 인용',external:'외부 학술 초록 인용 · 원문 확인 필요',insufficient:'근거 부족',conflicting:'자료 간 충돌 · 단정 주의'};
+        row.append(node('p','evidenceStatus '+(x.status==='insufficient'||x.status==='conflicting'?'uncertain':''),labels[x.status]||'검토 필요'));
+      }
+      if(x.citations.length){const details=node('details','evidenceDetails');details.append(node('summary','','근거 자료 '+x.citations.length+'개'));
+        for(const c of x.citations){const cite=node('div','evidenceItem');const label=c.kind==='provided'?'제공자료':'학술 초록';
+          if(c.url&&/^https:\/\//.test(c.url)){const a=node('a','',c.title);a.href=c.url;a.target='_blank';a.rel='noopener noreferrer';cite.append(a);}else cite.append(node('strong','',c.title));
+          cite.append(node('p','noteMeta',[label,c.publisher,c.date,c.location].filter(Boolean).join(' · ')),node('blockquote','',c.quote));details.append(cite);
+        }row.append(details);
+      }section.append(row);
+    }body.append(section);
+  }
+  if(!items.length){body.append(node('p','noteMeta',state.config?'녹음이나 직접 입력으로 발언을 기록한 뒤 「지금 토론 분석」을 누르세요.':'토론 주제와 양측 입장을 저장하면 분석할 수 있습니다.'));nav.append(node('span','noteMeta','분석 후 표시됩니다'));}
+  const last=state.notes&&state.notes[state.notes.length-1];
+  if(last){const labels={'provided-only':'제공자료에서 우선 검색했습니다.','scholarly-abstracts':'부족한 근거를 학술 초록에서 보완했습니다. 초록 인용은 논문 전체 검토나 사실 확정을 의미하지 않습니다.','external-disabled':'외부 검색이 꺼져 있습니다. 제공자료에서 찾은 범위만 표시합니다.','no-results':'관련 학술 초록을 찾지 못했습니다. 근거가 없다는 뜻은 아닙니다.','search-failed':'외부 검색에 실패했습니다. 제공자료 결과는 보존했습니다.','generation-failed':'검색 결과 보완에 실패했습니다. 제공자료 결과는 보존했습니다.'};body.append(node('p','noteMeta',labels[last.result.searchStatus]||''));}
+}
+async function loadDebate(){
+  if(!app.selected)return;
+  const id=app.selected.id,epoch=debate.epoch;if(debate.loadedId===id&&debate.state)return;
+  if(debate.busy)return;debate.busy=true;debateControls();$('debateStatus').textContent='토론 정보 불러오는 중...';
+  try{const state=await callGS('getDebateState',id);if(epoch!==debate.epoch)return;debate.loadedId=id;renderDebate(state,true);$('debateStatus').textContent=state.config?'토론 준비됨 · 제공자료 우선':'토론 정보를 입력해 주세요.';}
+  catch(e){if(epoch===debate.epoch)$('debateStatus').textContent='불러오기 실패: '+(e.message||e);}
+  finally{debate.busy=false;debateControls();}
+}
+async function saveDebate(){
+  if(!app.selected||debate.busy)return;
+  const config={topic:clean($('debateTopic').value),ours:clean($('debateOurs').value),theirs:clean($('debateTheirs').value),external:$('debateExternal').checked};
+  if(!config.topic||!config.ours||!config.theirs)return toast('토론 주제와 양측 입장을 입력하세요.');
+  const id=app.selected.id,epoch=debate.epoch;debate.busy=true;debateControls();$('debateStatus').textContent='토론 설정 저장 중...';
+  try{const state=await callGS('saveDebateConfig',id,config);if(epoch!==debate.epoch)return;renderDebate(state);$('debateStatus').textContent='설정 저장 완료 · 변경한 설정은 기존 발언부터 다시 분석합니다.';}
+  catch(e){if(epoch===debate.epoch)$('debateStatus').textContent='설정 저장 실패: '+(e.message||e);}
+  finally{debate.busy=false;debateControls();}
+}
+async function addMaterial(){
+  if(!app.selected||debate.busy||debate.fileBusy)return;
+  const title=clean($('debateMaterialTitle').value),text=clean($('debateMaterialText').value),url=clean($('debateMaterialUrl').value);
+  if(!title||!text)return toast('자료 제목과 본문을 입력하세요.');
+  if(text.length>40000)return toast('자료는 4만 자 이하로 나누어 등록하세요.');
+  const id=app.selected.id,epoch=debate.epoch;debate.busy=true;debateControls();$('debateStatus').textContent='자료 저장·검색 색인 생성 중...';
+  const requestId=debate.materialRequestId||(debate.materialRequestId=token());
+  try{const state=await callGS('addDebateMaterial',id,{title,text,url,requestId});if(epoch!==debate.epoch)return;
+    renderDebate(state);debate.materialRequestId='';$('debateMaterialText').value='';$('debateMaterialTitle').value='';$('debateMaterialUrl').value='';$('debateFile').value='';$('debateStatus').textContent='자료 등록 완료 · 같은 본문은 중복 저장하지 않습니다.';
+  }catch(e){if(epoch===debate.epoch)$('debateStatus').textContent='자료 등록 실패: '+(e.message||e);}
+  finally{debate.busy=false;debateControls();}
+}
+async function readDebateFile(){
+  const file=$('debateFile').files[0];if(!file||debate.busy||debate.fileBusy)return;
+  const epoch=debate.epoch;debate.fileBusy=true;debateControls();$('debateStatus').textContent='자료 파일 읽는 중...';
+  try{
+    if(file.size>10*1024*1024)throw new Error('파일은 10MB 이하로 선택하세요.');
+    let text='';
+    if(/\.pdf$/i.test(file.name)){
+      const pdfjs=await import('https://cdn.jsdelivr.net/npm/pdfjs-dist@6.5.438/build/pdf.min.mjs');
+      pdfjs.GlobalWorkerOptions.workerSrc='https://cdn.jsdelivr.net/npm/pdfjs-dist@6.5.438/build/pdf.worker.min.mjs';
+      const task=pdfjs.getDocument({data:new Uint8Array(await file.arrayBuffer()),isEvalSupported:false,enableXfa:false,cMapUrl:'https://cdn.jsdelivr.net/npm/pdfjs-dist@6.5.438/cmaps/',cMapPacked:true});
+      task.onPassword=()=>{task.destroy();};
+      const pdf=await task.promise;let blank=0;
+      try{
+        if(pdf.numPages>200)throw new Error('PDF는 200페이지 이하로 나누어 주세요.');
+        for(let pageNo=1;pageNo<=pdf.numPages;pageNo++){
+          if(epoch!==debate.epoch)return;
+          $('debateStatus').textContent='PDF 텍스트 추출 중 · '+pageNo+'/'+pdf.numPages+'페이지';
+          const page=await pdf.getPage(pageNo),content=await page.getTextContent();
+          const pageText=content.items.map(x=>x.str+(x.hasEOL?'\n':' ')).join('').trim();
+          if(pageText.length<10)blank++;else text+='\n[PDF p.'+pageNo+']\n'+pageText+'\n';
+          page.cleanup();if(text.length>40000)throw new Error('추출 텍스트가 4만 자를 넘습니다. PDF를 나누어 등록하세요.');
+        }
+      }finally{await pdf.destroy();}
+      if(blank)text='[주의: '+blank+'개 페이지는 텍스트를 추출하지 못했습니다.]\n'+text;
+      if(!text.replace(/\[.*?\]/g,'').trim())throw new Error('추출할 텍스트가 없습니다. 스캔 PDF는 OCR로 변환한 텍스트를 넣어 주세요.');
+    }else if(/\.txt$/i.test(file.name)){text=await file.text();if(/[\x00-\x08\x0b\x0c\x0e-\x1f\ufffd]/.test(text))throw new Error('UTF-8 일반 텍스트 파일을 선택하세요.');}
+    else throw new Error('TXT 또는 텍스트 PDF 파일을 선택하세요.');
+    if(text.length>40000)throw new Error('본문은 4만 자 이하로 나누어 등록하세요.');
+    if(epoch!==debate.epoch)return;
+    $('debateMaterialTitle').value=file.name.slice(0,160);$('debateMaterialText').value=text.trim();debate.materialRequestId='';
+    $('debateStatus').textContent='추출한 본문을 확인한 뒤 「자료 등록」을 누르세요. PDF 원본은 업로드하지 않고 추출 텍스트만 저장합니다.';
+  }catch(e){if(epoch===debate.epoch)$('debateStatus').textContent='파일 읽기 실패: '+(e.message||e);}
+  finally{debate.fileBusy=false;debateControls();}
+}
+async function runDebate(manual=true){
+  if(!app.selected||debate.busy||debate.fileBusy||!debate.state||!debate.state.config)return;
+  const last=debate.state.notes[debate.state.notes.length-1];
+  if(last&&last.lastSequence>=app.selected.totalSegments&&!app.queue.length){if(manual)$('debateStatus').textContent='새로 분석할 발언이 없습니다.';return;}
+  const id=app.selected.id,epoch=debate.epoch;debate.busy=true;debateControls();$('debateStatus').textContent='발언 분리·제공자료 검색·대응 검토 중...';
+  try{await flushQueue();const res=await callGS('analyzeDebate',id);if(epoch!==debate.epoch)return;
+    if(res.state)renderDebate(res.state);
+    const messages={nochange:'새로 분석할 발언이 없습니다.',cooldown:'호출 간격 제한 · 잠시 후 다시 분석하세요.',busy:'다른 토론 분석이 진행 중입니다.',stale:'설정이나 자료가 바뀌어 이전 결과를 반영하지 않았습니다.',nosettings:'먼저 토론 설정을 저장하세요.'};
+    $('debateStatus').textContent=res.status==='updated'?'토론 분석 완료'+(res.remainingCount?' · 남은 '+res.remainingCount+'개 발언은 다음 분석에서 반영합니다.':''):(messages[res.status]||'토론 분석 상태를 확인하세요.');
+  }catch(e){if(epoch===debate.epoch)$('debateStatus').textContent='토론 분석 실패: '+(e.message||e);}
+  finally{debate.busy=false;debateControls();}
+}
+function setupDebate(){
+  $('debateSummaryTab').addEventListener('click',()=>{selectSummaryTab('debate');loadDebate();});
+  $('debateSave').addEventListener('click',saveDebate);$('debateMaterialAdd').addEventListener('click',addMaterial);$('debateRun').addEventListener('click',()=>runDebate(true));
+  $('debateFile').addEventListener('change',readDebateFile);
+  $('debateMaterialText').addEventListener('input',()=>debate.materialRequestId='');
+  $('debateAuto').addEventListener('change',()=>{if($('debateAuto').checked&&!debate.state?.config){$('debateAuto').checked=false;toast('먼저 토론 설정을 저장하세요.');}});
+  debateControls();
 }
 
 if(isRecorder)setupRecorder();else setupDashboard();
